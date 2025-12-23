@@ -10,7 +10,9 @@ async def scrape_carrefour(search_term: str):
         safe_term = urllib.parse.quote(search_term)
         await page.goto(f"https://www.carrefour.be/nl/search?q={safe_term}")
         try:
-            try: await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=5000).click()
+            try:
+                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=5000)
+                await accept_btn.click()
             except: pass
             await page.wait_for_selector('.product-card', timeout=12000)
             cards = await page.query_selector_all('.product-card')

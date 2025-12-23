@@ -10,7 +10,9 @@ async def scrape_prikentik(search_term: str):
             page = await browser.new_page()
             safe_term = urllib.parse.quote(search_term)
             await page.goto(f"https://www.prikentik.be/catalogsearch/result/?q={safe_term}", timeout=15000)
-            try: await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=4000).click()
+            try:
+                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=4000)
+                await accept_btn.click()
             except: pass
             try: await page.wait_for_selector('.product-item', timeout=8000)
             except: pass

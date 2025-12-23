@@ -24,7 +24,9 @@ async def scrape_lidl(search_term: str):
         safe_term = urllib.parse.quote(search_term)
         await page.goto(f"https://www.lidl.be/q/nl-BE/search?q={safe_term}")
         try:
-            try: await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=4000).click()
+            try:
+                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=4000)
+                await accept_btn.click()
             except: pass
             await page.wait_for_selector('article', timeout=8000)
         except: pass

@@ -24,7 +24,9 @@ async def scrape_delhaize(search_term: str):
         safe_term = urllib.parse.quote(search_term)
         try:
             await page.goto(f"https://www.delhaize.be/nl/shop/search?q={safe_term}")
-            try: await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=4000).click()
+            try:
+                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=4000)
+                await accept_btn.click()
             except: pass
             await page.wait_for_selector('li[data-test="product-card"]', timeout=10000)
         except: pass
