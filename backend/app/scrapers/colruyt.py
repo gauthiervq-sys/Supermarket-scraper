@@ -30,7 +30,9 @@ async def scrape_colruyt(search_term: str):
         safe_term = urllib.parse.quote(search_term)
         await page.goto(f"https://www.collectandgo.be/nl/zoek?searchTerm={safe_term}")
         try:
-            try: await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=3000).click()
+            try:
+                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=3000)
+                await accept_btn.click()
             except: pass
             await page.wait_for_selector('.product-card', timeout=8000)
         except: pass
