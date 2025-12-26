@@ -30,6 +30,24 @@ async def scrape_aldi(search_term: str):
                         price = float(price_clean)
                     else:
                         price = 0.0
+                    
+                    # Try to extract volume from various possible locations
+                    volume = ""
+                    # Try quantity element
+                    quantity_el = await p.query_selector('.mod-article-tile__quantity')
+                    if quantity_el:
+                        volume = await quantity_el.inner_text()
+                    # Try subtitle element
+                    if not volume:
+                        subtitle_el = await p.query_selector('.mod-article-tile__subtitle')
+                        if subtitle_el:
+                            volume = await subtitle_el.inner_text()
+                    # Try data-subtitle attribute
+                    if not volume:
+                        subtitle_attr = await p.get_attribute('data-subtitle')
+                        if subtitle_attr:
+                            volume = subtitle_attr
+                    
                     img_el = await p.query_selector('img')
                     img_src = await img_el.get_attribute('src') if img_el else ""
                     # Ensure image URL is complete
@@ -39,8 +57,12 @@ async def scrape_aldi(search_term: str):
                     link_href = await link_el.get_attribute('href') if link_el else ""
                     if link_href and not link_href.startswith('http'):
                         link_href = f"https://www.aldi.be{link_href}"
-                    results.append({"store": "Aldi", "name": name.strip(), "price": price, "volume": "", "image": img_src, "link": link_href})
+                    results.append({"store": "Aldi", "name": name.strip(), "price": price, "volume": volume.strip(), "image": img_src, "link": link_href})
                 except: pass
         except: pass
         await browser.close()
-    return results
+    
+    # Filter results to match search term
+    search_lower = search_term.lower()
+    filtered_results = [r for r in results if search_lower in r['name'].lower()]
+    return filtered_results

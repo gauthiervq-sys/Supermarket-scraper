@@ -38,4 +38,8 @@ async def scrape_prikentik(search_term: str):
                 except: pass
             await browser.close()
         except: pass
-    return results
+    
+    # Filter results to match search term
+    search_lower = search_term.lower()
+    filtered_results = [r for r in results if search_lower in r['name'].lower()]
+    return filtered_results
