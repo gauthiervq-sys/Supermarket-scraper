@@ -7,6 +7,7 @@ async def scrape_colruyt(search_term: str):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
         page = await browser.new_page()
+        page.set_default_timeout(10000)  # 10 second default timeout
         async def handle_response(response):
             if "productview" in response.url and response.status == 200:
                 try:
@@ -17,24 +18,28 @@ async def scrape_colruyt(search_term: str):
                         price = price_data[0].get('offerPrice', 0.0) if price_data else 0.0
                         prod_id = item.get('uniqueID', '')
                         link = f"https://www.collectandgo.be/site/nl/artikel-detail/{prod_id}"
+                        img_url = item.get('fullImage', '')
+                        # Ensure image URL is complete
+                        if img_url and not img_url.startswith('http'):
+                            img_url = f"https://www.collectandgo.be{img_url}"
                         results.append({
                             "store": "Colruyt",
                             "name": item.get('name'),
                             "price": float(price),
                             "volume": item.get('content', ''),
-                            "image": item.get('fullImage', ''),
+                            "image": img_url,
                             "link": link
                         })
                 except: pass
         page.on("response", handle_response)
         safe_term = urllib.parse.quote(search_term)
-        await page.goto(f"https://www.collectandgo.be/nl/zoek?searchTerm={safe_term}")
         try:
+            await page.goto(f"https://www.collectandgo.be/nl/zoek?searchTerm={safe_term}", timeout=12000)
             try:
-                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=3000)
+                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=2000)
                 await accept_btn.click()
             except: pass
-            await page.wait_for_selector('.product-card', timeout=8000)
+            await page.wait_for_selector('.product-card', timeout=5000)
         except: pass
         await browser.close()
     return results

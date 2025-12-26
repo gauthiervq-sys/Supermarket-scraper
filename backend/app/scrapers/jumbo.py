@@ -8,8 +8,8 @@ async def scrape_jumbo(search_term: str):
     url = "https://mobileapi.jumbo.com/v17/search"
     params = {"q": search_term, "offset": 0, "limit": 15}
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, headers=headers, params=params, timeout=10.0)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers=headers, params=params)
             data = resp.json()
             items = data.get('products', {}).get('data', [])
             for p in items:
@@ -17,6 +17,9 @@ async def scrape_jumbo(search_term: str):
                 price = price_cent / 100 if price_cent else 0.0
                 imgs = p.get('imageInfo', {}).get('primaryView', [])
                 img = imgs[0].get('url', '') if imgs else ""
+                # Ensure image URL is complete
+                if img and not img.startswith('http'):
+                    img = f"https:{img}" if img.startswith('//') else f"https://www.jumbo.com{img}"
                 prod_id = p.get('id', '')
                 title_slug = p.get('title', '').replace(' ', '-')
                 link = f"https://www.jumbo.com/producten/{title_slug}-{prod_id}"
