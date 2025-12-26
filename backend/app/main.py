@@ -2,7 +2,7 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import logging
-from app.utils import calculate_price_per_liter, parse_volume_from_text
+from app.utils import calculate_price_per_liter, parse_volume_from_text, parse_unit_count, parse_unit_size
 
 from app.scrapers.colruyt import scrape_colruyt
 from app.scrapers.ah import scrape_ah
@@ -35,13 +35,14 @@ async def run_scraper_safe(scraper_func, q):
     async with sem:
         try:
             # Add overall timeout per scraper to prevent hanging
-            return await asyncio.wait_for(scraper_func(q), timeout=15.0)
+            results = await asyncio.wait_for(scraper_func(q), timeout=15.0)
+            return {"success": True, "results": results, "scraper": scraper_func.__name__}
         except asyncio.TimeoutError:
             logger.warning(f"⏱️ Timeout in scraper: {scraper_func.__name__}")
-            return []
+            return {"success": False, "results": [], "scraper": scraper_func.__name__, "error": "Timeout"}
         except Exception as e:
             logger.error(f"❌ Error in scraper {scraper_func.__name__}: {e}")
-            return []
+            return {"success": False, "results": [], "scraper": scraper_func.__name__, "error": str(e)}
 
 # Store logos using more reliable CDN sources
 STORE_LOGOS = {
@@ -68,10 +69,23 @@ async def search_products(q: str = Query(..., min_length=2)):
     ]
     tasks = [run_scraper_safe(s, q) for s in scrapers]
     results = await asyncio.gather(*tasks)
+    
+    # Track scraper statuses
+    scraper_statuses = []
     all_products = []
+    
     for res in results:
-        if res and isinstance(res, list):
-            all_products.extend(res)
+        if res and isinstance(res, dict):
+            scraper_name = res.get('scraper', '').replace('scrape_', '').replace('_', ' ').title()
+            scraper_statuses.append({
+                "name": scraper_name,
+                "success": res.get('success', False),
+                "error": res.get('error', None),
+                "count": len(res.get('results', []))
+            })
+            if res.get('results') and isinstance(res.get('results'), list):
+                all_products.extend(res.get('results'))
+    
     for p in all_products:
         p['price_per_liter'] = calculate_price_per_liter(p['price'], p['volume'], p['name'])
         p['liter_value'] = parse_volume_from_text(p['volume']) 
@@ -80,9 +94,29 @@ async def search_products(q: str = Query(..., min_length=2)):
         if not p['volume']:
             if p['liter_value'] < 1: p['volume'] = f"{int(p['liter_value']*100)}cl"
             else: p['volume'] = f"{p['liter_value']}L"
+        
+        # Calculate unit information for multi-packs
+        unit_count = parse_unit_count(p['volume']) or parse_unit_count(p['name'])
+        unit_size, unit_type = parse_unit_size(p['volume']) or parse_unit_size(p['name'])
+        
+        p['unit_count'] = unit_count
+        p['unit_size'] = unit_size
+        p['unit_type'] = unit_type
+        
+        # Calculate price per unit (can/bottle)
+        if unit_count > 1:
+            p['price_per_unit'] = round(p['price'] / unit_count, 2)
+        else:
+            p['price_per_unit'] = p['price']
+        
         # Assign logo from the centralized dictionary
         p['logo'] = STORE_LOGOS.get(p['store'], '')
+    
     all_products = [p for p in all_products if p['price'] > 0]
     all_products.sort(key=lambda x: x['price_per_liter'] if x['price_per_liter'] > 0 else 999)
     logger.info(f"✅ Found {len(all_products)} products")
-    return all_products
+    
+    return {
+        "products": all_products,
+        "scraperStatuses": scraper_statuses
+    }

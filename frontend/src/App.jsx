@@ -8,6 +8,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [selectedSize, setSelectedSize] = useState('all')
   const [availableSizes, setAvailableSizes] = useState([])
+  const [scraperStatuses, setScraperStatuses] = useState([])
 
   const search = async () => {
     if (!query) return
@@ -28,13 +29,34 @@ function App() {
       }
 
       const data = await res.json()
-      setProducts(data)
+      
+      // Handle new API response format with products and statuses
+      const productsData = data.products || data
+      const statusesData = data.scraperStatuses || []
+      
+      setProducts(productsData)
+      setScraperStatuses(statusesData)
 
       const sizes = new Set()
-      data.forEach(p => {
+      productsData.forEach(p => {
         if (p.liter_value > 0) sizes.add(p.volume)
       })
-      setAvailableSizes(Array.from(sizes).sort())
+      
+      // Sort sizes properly - handle different formats
+      const sortedSizes = Array.from(sizes).sort((a, b) => {
+        const getNumericValue = (str) => {
+          const match = str.match(/(\d+\.?\d*)\s*(l|cl|ml|x)/i)
+          if (!match) return 0
+          let value = parseFloat(match[1])
+          const unit = match[2].toLowerCase()
+          if (unit === 'ml') value = value / 1000
+          else if (unit === 'cl') value = value / 100
+          return value
+        }
+        return getNumericValue(a) - getNumericValue(b)
+      })
+      
+      setAvailableSizes(sortedSizes)
     } catch (e) {
       console.error(e)
       alert('Error: Kan geen verbinding maken met backend.')
@@ -100,6 +122,31 @@ function App() {
                   {size}
                 </button>
               ))}
+            </div>
+          )}
+          
+          {/* Scraper Status Display */}
+          {scraperStatuses.length > 0 && (
+            <div className="mt-4 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+              <h3 className="text-xs font-semibold text-slate-400 mb-2 uppercase">Supermarkt Status</h3>
+              <div className="flex flex-wrap gap-2">
+                {scraperStatuses.map((status, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs ${
+                      status.success
+                        ? 'bg-green-900/30 text-green-400 border border-green-700/50'
+                        : 'bg-red-900/30 text-red-400 border border-red-700/50'
+                    }`}
+                  >
+                    <span>{status.success ? '✓' : '✗'}</span>
+                    <span className="font-medium">{status.name}</span>
+                    {status.success && status.count > 0 && (
+                      <span className="text-slate-400">({status.count})</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
