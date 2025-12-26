@@ -14,6 +14,21 @@ function getUnitLabel(product) {
   return null
 }
 
+function getUnitDescription(product) {
+  // Check if this is a multi-pack
+  if (product.unit_count && product.unit_count > 1) {
+    if (product.unit_type === 'ML') {
+      return 'per blik'
+    } else if (product.unit_type === 'CL') {
+      return 'per fles'
+    } else if (product.unit_type === 'L') {
+      return 'per stuk'
+    }
+    return 'per stuk'
+  }
+  return null
+}
+
 export default function ProductCard({ product }) {
   const [imageError, setImageError] = useState(false)
   const [logoError, setLogoError] = useState(false)
@@ -24,6 +39,8 @@ export default function ProductCard({ product }) {
     product.image.startsWith('http')
 
   const unitLabel = getUnitLabel(product)
+  const unitDescription = getUnitDescription(product)
+  const showUnitPrice = product.unit_count && product.unit_count > 1
 
   return (
     <a
@@ -73,28 +90,46 @@ export default function ProductCard({ product }) {
           </span>
         </div>
 
-        <div className="mt-auto flex justify-between items-end border-t border-slate-700 pt-4">
-          <div>
-            <div className="text-2xl font-bold text-white">
-              €{product.price.toFixed(2)}
+        <div className="mt-auto border-t border-slate-700 pt-4">
+          {/* Main price - total price for the pack */}
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <div className="text-2xl font-bold text-white">
+                €{product.price.toFixed(2)}
+              </div>
+              <div className="text-xs text-slate-400">
+                {product.unit_count > 1 ? `Totaal (${product.unit_count} stuks)` : 'Prijs per stuk'}
+              </div>
             </div>
-            <div className="text-xs text-slate-400">Prijs per stuk</div>
+
+            {/* Price per liter/kg */}
+            <div className="text-right">
+              {product.price_per_liter > 0 && unitLabel ? (
+                <>
+                  <div className="text-lg font-bold text-emerald-400">
+                    €{product.price_per_liter.toFixed(2)}
+                  </div>
+                  <div className="text-xs text-emerald-600/70 font-medium">
+                    {unitLabel}
+                  </div>
+                </>
+              ) : (
+                <div className="text-slate-600 text-sm">N/A</div>
+              )}
+            </div>
           </div>
 
-          <div className="text-right">
-            {product.price_per_liter > 0 && unitLabel ? (
-              <>
-                <div className="text-lg font-bold text-emerald-400">
-                  €{product.price_per_liter}
-                </div>
-                <div className="text-xs text-emerald-600/70 font-medium">
-                  {unitLabel}
-                </div>
-              </>
-            ) : (
-              <div className="text-slate-600 text-sm">N/A</div>
-            )}
-          </div>
+          {/* Price per unit (can/bottle) for multi-packs */}
+          {showUnitPrice && product.price_per_unit != null && (
+            <div className="flex justify-between items-center pt-3 border-t border-slate-700/50">
+              <div className="text-xs text-slate-400">
+                {unitDescription || 'per stuk'}
+              </div>
+              <div className="text-base font-semibold text-blue-400">
+                €{product.price_per_unit.toFixed(2)}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </a>
