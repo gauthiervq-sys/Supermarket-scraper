@@ -25,4 +25,8 @@ async def scrape_jumbo(search_term: str):
                 link = f"https://www.jumbo.com/producten/{title_slug}-{prod_id}"
                 results.append({"store": "Jumbo", "name": p.get('title'), "price": float(price), "volume": p.get('quantity', ''), "image": img, "link": link})
     except Exception as e: print(f"Jumbo error: {e}")
-    return results
+    
+    # Filter results to match search term
+    search_lower = search_term.lower()
+    filtered_results = [r for r in results if search_lower in r['name'].lower()]
+    return filtered_results

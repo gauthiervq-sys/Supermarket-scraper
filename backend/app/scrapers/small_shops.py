@@ -35,7 +35,11 @@ async def scrape_woocommerce(store_name, base_url, search_term):
                 except: pass
             await browser.close()
         except: pass
-    return results
+    
+    # Filter results to match search term
+    search_lower = search_term.lower()
+    filtered_results = [r for r in results if search_lower in r['name'].lower()]
+    return filtered_results
 
 async def scrape_snuffelstore(q): return await scrape_woocommerce("Snuffelstore", "https://www.snuffelstore.be/", q)
 async def scrape_drinkscorner(q): return await scrape_woocommerce("Drinks Corner", "https://drinkscorner.be/", q)

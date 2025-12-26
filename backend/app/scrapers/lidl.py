@@ -1,5 +1,6 @@
 from playwright.async_api import async_playwright
 import urllib.parse
+import asyncio
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -36,6 +37,12 @@ async def scrape_lidl(search_term: str):
                 await accept_btn.click()
             except: pass
             await page.wait_for_selector('article', timeout=5000)
+            # Wait for response handlers to complete processing
+            await asyncio.sleep(2)
         except: pass
         await browser.close()
-    return results
+    
+    # Filter results to match search term
+    search_lower = search_term.lower()
+    filtered_results = [r for r in results if search_lower in r['name'].lower()]
+    return filtered_results

@@ -43,4 +43,8 @@ async def scrape_carrefour(search_term: str):
                 except: pass
         except: pass
         await browser.close()
-    return results
+    
+    # Filter results to match search term
+    search_lower = search_term.lower()
+    filtered_results = [r for r in results if search_lower in r['name'].lower()]
+    return filtered_results
