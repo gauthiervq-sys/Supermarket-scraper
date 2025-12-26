@@ -96,8 +96,13 @@ async def search_products(q: str = Query(..., min_length=2)):
             else: p['volume'] = f"{p['liter_value']}L"
         
         # Calculate unit information for multi-packs
-        unit_count = parse_unit_count(p['volume']) or parse_unit_count(p['name'])
-        unit_size, unit_type = parse_unit_size(p['volume']) or parse_unit_size(p['name'])
+        unit_count = parse_unit_count(p['volume'])
+        if unit_count == 1:
+            unit_count = parse_unit_count(p['name'])
+        
+        unit_size, unit_type = parse_unit_size(p['volume'])
+        if unit_size == 0.0:
+            unit_size, unit_type = parse_unit_size(p['name'])
         
         p['unit_count'] = unit_count
         p['unit_size'] = unit_size

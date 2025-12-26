@@ -120,7 +120,7 @@ export default function ProductCard({ product }) {
           </div>
 
           {/* Price per unit (can/bottle) for multi-packs */}
-          {showUnitPrice && (
+          {showUnitPrice && product.price_per_unit != null && (
             <div className="flex justify-between items-center pt-3 border-t border-slate-700/50">
               <div className="text-xs text-slate-400">
                 {unitDescription || 'per stuk'}

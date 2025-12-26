@@ -33,9 +33,9 @@ def parse_unit_count(text: str) -> int:
     return 1
 
 def parse_unit_size(text: str) -> tuple:
-    """Parse unit size and unit type from text. Returns (size, unit) like (330, 'ml') or (1.5, 'L')"""
+    """Parse unit size and unit type from text. Returns (size, unit) like (330.0, 'ML') or (1.5, 'L')"""
     if not text:
-        return (0, '')
+        return (0.0, '')
     text = str(text).lower().replace(',', '.')
     
     # Check for multi-pack format like "6 x 330 ml"
@@ -52,7 +52,7 @@ def parse_unit_size(text: str) -> tuple:
         unit = match_single.group(2).upper()
         return (size, unit)
     
-    return (0, '')
+    return (0.0, '')
 
 def calculate_price_per_liter(price: float, volume_str: str, name: str) -> float:
     liters = parse_volume_from_text(volume_str)
