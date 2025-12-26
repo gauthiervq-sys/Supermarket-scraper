@@ -45,7 +45,7 @@ function App() {
       // Sort sizes properly - handle different formats
       const sortedSizes = Array.from(sizes).sort((a, b) => {
         const getNumericValue = (str) => {
-          const match = str.match(/(\d+\.?\d*)\s*(l|cl|ml|x)/i)
+          const match = str.match(/(\d+\.?\d*)\s*(l|cl|ml)/i)
           if (!match) return 0
           let value = parseFloat(match[1])
           const unit = match[2].toLowerCase()
