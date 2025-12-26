@@ -33,16 +33,13 @@ async def scrape_aldi(search_term: str):
                     
                     # Try to extract volume from various possible locations
                     volume = ""
-                    # Try quantity element
                     quantity_el = await p.query_selector('.mod-article-tile__quantity')
                     if quantity_el:
                         volume = await quantity_el.inner_text()
-                    # Try subtitle element
                     if not volume:
                         subtitle_el = await p.query_selector('.mod-article-tile__subtitle')
                         if subtitle_el:
                             volume = await subtitle_el.inner_text()
-                    # Try data-subtitle attribute
                     if not volume:
                         subtitle_attr = await p.get_attribute('data-subtitle')
                         if subtitle_attr:
