@@ -57,13 +57,11 @@ async def scrape_prikentik(search_term: str):
                     img_el = await prod.query_selector('.product-image-photo, img.photo, .product-item-photo img')
                     img = ""
                     if img_el:
-                        # Try various lazy loading attributes first
-                        img = await img_el.get_attribute('data-original') or \
-                              await img_el.get_attribute('data-src') or \
-                              await img_el.get_attribute('data-lazy') or \
-                              await img_el.get_attribute('data-amsrc') or \
-                              await img_el.get_attribute('srcset') or \
-                              await img_el.get_attribute('src') or ""
+                        # Try various lazy loading attributes first, breaking early when found
+                        for attr in ['data-original', 'data-src', 'data-lazy', 'data-amsrc', 'srcset', 'src']:
+                            img = await img_el.get_attribute(attr)
+                            if img:
+                                break
                         
                         # If srcset, take the first URL
                         if img and ' ' in img:
