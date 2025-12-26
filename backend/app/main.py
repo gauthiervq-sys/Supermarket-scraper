@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
+import logging
 from app.utils import calculate_price_per_liter, parse_volume_from_text
 
 from app.scrapers.colruyt import scrape_colruyt
@@ -12,6 +13,10 @@ from app.scrapers.jumbo import scrape_jumbo
 from app.scrapers.carrefour import scrape_carrefour
 from app.scrapers.prikentik import scrape_prikentik
 from app.scrapers.small_shops import scrape_snuffelstore, scrape_drinkscorner
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -32,10 +37,10 @@ async def run_scraper_safe(scraper_func, q):
             # Add overall timeout per scraper to prevent hanging
             return await asyncio.wait_for(scraper_func(q), timeout=15.0)
         except asyncio.TimeoutError:
-            print(f"⏱️ Timeout in scraper: {scraper_func.__name__}")
+            logger.warning(f"⏱️ Timeout in scraper: {scraper_func.__name__}")
             return []
         except Exception as e:
-            print(f"❌ Error in scraper {scraper_func.__name__}: {e}")
+            logger.error(f"❌ Error in scraper {scraper_func.__name__}: {e}")
             return []
 
 # Store logos using more reliable CDN sources
@@ -54,7 +59,7 @@ STORE_LOGOS = {
 
 @app.get("/search")
 async def search_products(q: str = Query(..., min_length=2)):
-    print(f"--- 🚦 Start Veilige Zoekopdracht: {q} ---")
+    logger.info(f"--- 🚦 Start Veilige Zoekopdracht: {q} ---")
     scrapers = [
         scrape_colruyt, scrape_ah, scrape_aldi, 
         scrape_delhaize, scrape_lidl, scrape_jumbo, 
@@ -79,5 +84,5 @@ async def search_products(q: str = Query(..., min_length=2)):
         p['logo'] = STORE_LOGOS.get(p['store'], '')
     all_products = [p for p in all_products if p['price'] > 0]
     all_products.sort(key=lambda x: x['price_per_liter'] if x['price_per_liter'] > 0 else 999)
-    print(f"✅ Found {len(all_products)} products")
+    logger.info(f"✅ Found {len(all_products)} products")
     return all_products

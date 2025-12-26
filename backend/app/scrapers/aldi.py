@@ -1,13 +1,16 @@
 from playwright.async_api import async_playwright
 import urllib.parse
 
+# Default page timeout in milliseconds
+DEFAULT_PAGE_TIMEOUT = 10000
+
 async def scrape_aldi(search_term: str):
     results = []
     print(f"🛒 Aldi: Scanning...")
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
-        page.set_default_timeout(10000)  # 10 second default timeout
+        page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
         safe_term = urllib.parse.quote(search_term)
         url = f"https://www.aldi.be/nl/zoekresultaten.html?query={safe_term}&searchCategory=Submitted%20Search"
         try:

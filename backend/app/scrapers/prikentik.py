@@ -1,6 +1,9 @@
 from playwright.async_api import async_playwright
 import urllib.parse
 
+# Default page timeout in milliseconds
+DEFAULT_PAGE_TIMEOUT = 10000
+
 async def scrape_prikentik(search_term: str):
     results = []
     print(f"🍺 Prik&Tik: Scanning...")
@@ -8,7 +11,7 @@ async def scrape_prikentik(search_term: str):
         try:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-            page.set_default_timeout(10000)  # 10 second default timeout
+            page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
             safe_term = urllib.parse.quote(search_term)
             await page.goto(f"https://www.prikentik.be/catalogsearch/result/?q={safe_term}", timeout=12000)
             try:

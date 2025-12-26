@@ -1,6 +1,9 @@
 from playwright.async_api import async_playwright
 import urllib.parse
 
+# Default page timeout in milliseconds
+DEFAULT_PAGE_TIMEOUT = 10000
+
 async def scrape_woocommerce(store_name, base_url, search_term):
     results = []
     print(f"📦 {store_name}: Scanning...")
@@ -8,7 +11,7 @@ async def scrape_woocommerce(store_name, base_url, search_term):
         try:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-            page.set_default_timeout(10000)  # 10 second default timeout
+            page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
             safe_term = urllib.parse.quote(search_term)
             await page.goto(f"{base_url}?s={safe_term}&post_type=product", timeout=15000)
             try: await page.wait_for_selector('.product', timeout=6000)

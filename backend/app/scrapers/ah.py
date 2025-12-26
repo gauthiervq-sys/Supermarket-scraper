@@ -1,6 +1,9 @@
 from playwright.async_api import async_playwright
 import urllib.parse
 
+# Default page timeout in milliseconds
+DEFAULT_PAGE_TIMEOUT = 10000
+
 async def scrape_ah(search_term: str):
     results = []
     print(f"🛒 AH: Scanning...")
@@ -8,7 +11,7 @@ async def scrape_ah(search_term: str):
         browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
         context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         page = await context.new_page()
-        page.set_default_timeout(10000)  # 10 second default timeout
+        page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
         await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         async def handle_response(response):
             if "search" in response.url and response.status == 200:
