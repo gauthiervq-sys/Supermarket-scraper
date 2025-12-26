@@ -14,6 +14,9 @@ function App() {
     if (!query) return
     setLoading(true)
     setProducts([])
+    setSelectedSize('all')  // Reset filter for new search
+    setAvailableSizes([])   // Clear available sizes for new search
+    setScraperStatuses([])  // Clear previous scraper statuses
 
     try {
       const protocol = window.location.protocol
