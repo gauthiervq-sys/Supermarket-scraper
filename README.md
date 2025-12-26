@@ -107,7 +107,7 @@ If you have Docker installed, you can run everything with one command:
 
 ```bash
 # From the project root directory
-docker-compose up --build
+docker compose up --build
 ```
 
 This will:
