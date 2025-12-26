@@ -17,8 +17,12 @@ function getUnitLabel(product) {
 function getUnitDescription(product) {
   // Check if this is a multi-pack
   if (product.unit_count && product.unit_count > 1) {
-    if (product.unit_type) {
-      return `per ${product.unit_type === 'ML' ? 'blik' : product.unit_type === 'CL' ? 'fles' : 'stuk'}`
+    if (product.unit_type === 'ML') {
+      return 'per blik'
+    } else if (product.unit_type === 'CL') {
+      return 'per fles'
+    } else if (product.unit_type === 'L') {
+      return 'per stuk'
     }
     return 'per stuk'
   }
