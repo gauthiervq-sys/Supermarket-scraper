@@ -1,6 +1,9 @@
 from playwright.async_api import async_playwright
 import urllib.parse
 
+# Default page timeout in milliseconds
+DEFAULT_PAGE_TIMEOUT = 10000
+
 async def scrape_prikentik(search_term: str):
     results = []
     print(f"🍺 Prik&Tik: Scanning...")
@@ -8,13 +11,14 @@ async def scrape_prikentik(search_term: str):
         try:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
+            page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
             safe_term = urllib.parse.quote(search_term)
-            await page.goto(f"https://www.prikentik.be/catalogsearch/result/?q={safe_term}", timeout=15000)
+            await page.goto(f"https://www.prikentik.be/catalogsearch/result/?q={safe_term}", timeout=12000)
             try:
-                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=4000)
+                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=2000)
                 await accept_btn.click()
             except: pass
-            try: await page.wait_for_selector('.product-item', timeout=8000)
+            try: await page.wait_for_selector('.product-item', timeout=5000)
             except: pass
             products = await page.query_selector_all('.product-item')
             for prod in products:
@@ -27,6 +31,9 @@ async def scrape_prikentik(search_term: str):
                     link = await name_el.get_attribute('href')
                     img_el = await prod.query_selector('.product-image-photo')
                     img = await img_el.get_attribute('src') if img_el else ""
+                    # Ensure image URL is complete
+                    if img and not img.startswith('http'):
+                        img = f"https://www.prikentik.be{img}"
                     results.append({"store": "Prik&Tik", "name": name.strip(), "price": price, "volume": "", "image": img, "link": link})
                 except: pass
             await browser.close()

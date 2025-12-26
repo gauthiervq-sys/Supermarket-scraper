@@ -1,6 +1,9 @@
 from playwright.async_api import async_playwright
 import urllib.parse
 
+# Default page timeout in milliseconds
+DEFAULT_PAGE_TIMEOUT = 10000
+
 async def scrape_woocommerce(store_name, base_url, search_term):
     results = []
     print(f"📦 {store_name}: Scanning...")
@@ -8,9 +11,10 @@ async def scrape_woocommerce(store_name, base_url, search_term):
         try:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
+            page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
             safe_term = urllib.parse.quote(search_term)
-            await page.goto(f"{base_url}?s={safe_term}&post_type=product", timeout=20000)
-            try: await page.wait_for_selector('.product', timeout=8000)
+            await page.goto(f"{base_url}?s={safe_term}&post_type=product", timeout=15000)
+            try: await page.wait_for_selector('.product', timeout=6000)
             except: pass
             products = await page.query_selector_all('.product')
             for prod in products:
@@ -24,6 +28,9 @@ async def scrape_woocommerce(store_name, base_url, search_term):
                     link = await link_el.get_attribute('href') if link_el else ""
                     img_el = await prod.query_selector('img')
                     img = await img_el.get_attribute('src') if img_el else ""
+                    # Ensure image URL is complete
+                    if img and not img.startswith('http'):
+                        img = f"{base_url.rstrip('/')}{img}" if img.startswith('/') else f"{base_url}{img}"
                     results.append({"store": store_name, "name": name.strip(), "price": price, "volume": "", "image": img, "link": link})
                 except: pass
             await browser.close()

@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 function getUnitLabel(product) {
   const v = (product.volume || '').toLowerCase()
 
@@ -13,6 +15,9 @@ function getUnitLabel(product) {
 }
 
 export default function ProductCard({ product }) {
+  const [imageError, setImageError] = useState(false)
+  const [logoError, setLogoError] = useState(false)
+
   const hasValidImage =
     product.image &&
     typeof product.image === 'string' &&
@@ -29,8 +34,13 @@ export default function ProductCard({ product }) {
     >
       {/* Logo rechtsboven, met fallback als er geen logo-url is */}
       <div className="absolute top-4 right-4 z-10 bg-white/90 p-1 rounded-md shadow-sm min-w-[2.5rem] flex items-center justify-center">
-        {product.logo ? (
-          <img src={product.logo} alt={product.store} className="h-6 object-contain" />
+        {product.logo && !logoError ? (
+          <img 
+            src={product.logo} 
+            alt={product.store} 
+            className="h-6 object-contain"
+            onError={() => setLogoError(true)}
+          />
         ) : (
           <span className="text-[0.6rem] font-semibold text-slate-800 uppercase">
             {product.store}
@@ -40,11 +50,12 @@ export default function ProductCard({ product }) {
 
       {/* Productafbeelding met fallback voor kapotte URLs */}
       <div className="h-48 w-full bg-white rounded-xl flex items-center justify-center mb-4 p-4 group-hover:scale-105 transition duration-500">
-        {hasValidImage ? (
+        {hasValidImage && !imageError ? (
           <img
             src={product.image}
             alt={product.name}
             className="max-h-full max-w-full object-contain"
+            onError={() => setImageError(true)}
           />
         ) : (
           <div className="text-gray-400 text-4xl">🥤</div>
