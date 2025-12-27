@@ -4,3 +4,5 @@ playwright
 beautifulsoup4
 requests
 httpx
+pytesseract
+Pillow

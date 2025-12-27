@@ -3,6 +3,7 @@ import urllib.parse
 import asyncio
 import logging
 import os
+from app.ocr_utils import try_ocr_price_extraction
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -107,6 +108,74 @@ async def scrape_colruyt(search_term: str):
             
             if DEBUG_MODE:
                 logger.debug(f"  Colruyt: Received {len(api_responses_received)} API responses")
+            
+            # Fallback: scrape from DOM if no API results
+            if not results:
+                if DEBUG_MODE:
+                    logger.debug(f"  Colruyt: No API results, trying DOM scraping")
+                cards = await page.query_selector_all('.product-card, .product-item, article, [data-testid="product"]')
+                if DEBUG_MODE:
+                    logger.debug(f"  Colruyt: Found {len(cards)} product cards in DOM")
+                for card in cards:
+                    try:
+                        name_el = await card.query_selector('.product-name, .product-title, h3, h2, a[class*="title"], a[class*="name"]')
+                        name = await name_el.inner_text() if name_el else ""
+                        if not name:
+                            continue
+                        
+                        price_el = await card.query_selector('.price, [class*="price"], [data-testid="price"]')
+                        price = 0.0
+                        if price_el:
+                            try:
+                                price_txt = await price_el.inner_text()
+                                # Try to parse price from text
+                                if price_txt and price_txt.strip():
+                                    price = float(price_txt.replace('\n', '').replace('€', '').replace(',', '.').strip())
+                                else:
+                                    # If no text, price might be in an image - try OCR
+                                    if DEBUG_MODE:
+                                        logger.debug(f"  Colruyt: No price text found, trying OCR for '{name}'")
+                                    ocr_price = await try_ocr_price_extraction(page, price_el)
+                                    if ocr_price:
+                                        price = ocr_price
+                                        if DEBUG_MODE:
+                                            logger.debug(f"  Colruyt: OCR extracted price: €{price}")
+                            except (ValueError, AttributeError) as e:
+                                # Price parsing failed, try OCR
+                                if DEBUG_MODE:
+                                    logger.debug(f"  Colruyt: Price parsing failed for '{name}', trying OCR: {e}")
+                                ocr_price = await try_ocr_price_extraction(page, price_el)
+                                if ocr_price:
+                                    price = ocr_price
+                                    if DEBUG_MODE:
+                                        logger.debug(f"  Colruyt: OCR extracted price: €{price}")
+                        
+                        link_el = await card.query_selector('a')
+                        link_href = await link_el.get_attribute('href') if link_el else ""
+                        if link_href and not link_href.startswith('http'):
+                            link_href = f"https://www.collectandgo.be{link_href}"
+                        
+                        img_el = await card.query_selector('img')
+                        img = ""
+                        if img_el:
+                            img = await img_el.get_attribute('data-src') or await img_el.get_attribute('src') or ""
+                        if img and not img.startswith('http'):
+                            if img.startswith('//'):
+                                img = f"https:{img}"
+                            else:
+                                img = f"https://www.collectandgo.be{img}"
+                        
+                        results.append({
+                            "store": "Colruyt",
+                            "name": name.strip(),
+                            "price": price,
+                            "volume": "",
+                            "image": img,
+                            "link": link_href
+                        })
+                    except Exception as e:
+                        if DEBUG_MODE:
+                            logger.debug(f"  Colruyt: Error parsing product from DOM: {e}")
         except Exception as e:
             logger.warning(f"  Colruyt: Navigation error: {e}")
         await browser.close()

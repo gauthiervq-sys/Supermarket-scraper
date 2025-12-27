@@ -3,6 +3,7 @@ import urllib.parse
 import asyncio
 import logging
 import os
+from app.ocr_utils import try_ocr_price_extraction
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -67,8 +68,28 @@ async def scrape_prikentik(search_term: str):
                     price_el = await prod.query_selector('.price, .price-wrapper .price, [data-price-type="finalPrice"]')
                     price = 0.0
                     if price_el:
-                        price_text = await price_el.inner_text()
-                        price = float(price_text.replace('€', '').replace(',', '.').strip())
+                        try:
+                            price_text = await price_el.inner_text()
+                            if price_text and price_text.strip():
+                                price = float(price_text.replace('€', '').replace(',', '.').strip())
+                            else:
+                                # If no text, price might be in an image - try OCR
+                                if DEBUG_MODE:
+                                    logger.debug(f"  Prik&Tik: No price text found, trying OCR for '{name}'")
+                                ocr_price = await try_ocr_price_extraction(page, price_el)
+                                if ocr_price:
+                                    price = ocr_price
+                                    if DEBUG_MODE:
+                                        logger.debug(f"  Prik&Tik: OCR extracted price: €{price}")
+                        except (ValueError, AttributeError) as e:
+                            # Price parsing failed, try OCR
+                            if DEBUG_MODE:
+                                logger.debug(f"  Prik&Tik: Price parsing failed for '{name}', trying OCR: {e}")
+                            ocr_price = await try_ocr_price_extraction(page, price_el)
+                            if ocr_price:
+                                price = ocr_price
+                                if DEBUG_MODE:
+                                    logger.debug(f"  Prik&Tik: OCR extracted price: €{price}")
                     
                     link = await name_el.get_attribute('href') if name_el else ""
                     

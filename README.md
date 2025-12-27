@@ -19,6 +19,10 @@ Before you begin, ensure you have the following installed:
 - **Python 3.8+** - [Download Python](https://www.python.org/downloads/)
 - **Node.js 16+** and **npm** - [Download Node.js](https://nodejs.org/)
 - **Git** - [Download Git](https://git-scm.com/downloads/)
+- **Tesseract OCR** - Required for extracting prices from images
+  - **Windows**: Download from [Tesseract at UB Mannheim](https://github.com/UB-Mannheim/tesseract/wiki) or use `choco install tesseract`
+  - **macOS**: `brew install tesseract`
+  - **Linux (Ubuntu/Debian)**: `sudo apt-get install tesseract-ocr`
 
 Optional (for containerized deployment):
 - **Docker** and **Docker Compose** - [Download Docker](https://www.docker.com/get-started)
@@ -54,6 +58,8 @@ pip install -r requirements.txt
 # Install Playwright browsers (required for web scraping)
 playwright install chromium
 ```
+
+**Note**: The application uses OCR (Optical Character Recognition) to extract prices from websites that embed prices in images. Make sure Tesseract OCR is installed on your system (see Prerequisites above).
 
 ### 3. Frontend Setup
 

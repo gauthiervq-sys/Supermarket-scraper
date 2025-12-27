@@ -3,6 +3,7 @@ import urllib.parse
 import asyncio
 import logging
 import os
+from app.ocr_utils import try_ocr_price_extraction
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -113,11 +114,32 @@ async def scrape_carrefour(search_term: str):
                         name_el = await card.query_selector('.product-card__title, .product-title, h3, h2, a')
                         name = await name_el.inner_text() if name_el else "Naamloos"
                         price_el = await card.query_selector('.product-card-price__price, .price, [data-testid="price"], [class*="price"]')
+                        price = 0.0
                         if price_el:
-                            price_txt = await price_el.inner_text()
-                            price = float(price_txt.replace('\n', '').replace('€', '').replace(',', '.').strip())
-                        else:
-                            price = 0.0
+                            try:
+                                price_txt = await price_el.inner_text()
+                                # Try to parse price from text
+                                if price_txt and price_txt.strip():
+                                    price = float(price_txt.replace('\n', '').replace('€', '').replace(',', '.').strip())
+                                else:
+                                    # If no text, price might be in an image - try OCR
+                                    if DEBUG_MODE:
+                                        logger.debug(f"  Carrefour: No price text found, trying OCR for '{name}'")
+                                    ocr_price = await try_ocr_price_extraction(page, price_el)
+                                    if ocr_price:
+                                        price = ocr_price
+                                        if DEBUG_MODE:
+                                            logger.debug(f"  Carrefour: OCR extracted price: €{price}")
+                            except (ValueError, AttributeError) as e:
+                                # Price parsing failed, try OCR
+                                if DEBUG_MODE:
+                                    logger.debug(f"  Carrefour: Price parsing failed for '{name}', trying OCR: {e}")
+                                ocr_price = await try_ocr_price_extraction(page, price_el)
+                                if ocr_price:
+                                    price = ocr_price
+                                    if DEBUG_MODE:
+                                        logger.debug(f"  Carrefour: OCR extracted price: €{price}")
+                        
                         link_el = await card.query_selector('a.product-card__title-link, a')
                         link_href = await link_el.get_attribute('href') if link_el else ""
                         if link_href and not link_href.startswith('http'):
