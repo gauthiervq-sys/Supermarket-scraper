@@ -38,10 +38,10 @@ def parse_price_text(price_text: str) -> Optional[float]:
     
     # Try simple parsing first (for clean DOM text)
     try:
-        # Clean up the text
-        cleaned = price_text.replace('\n', '').replace('€', '').replace(' ', '').strip()
+        # Clean up the text - remove common currency symbols and whitespace
+        cleaned = price_text.replace('\n', '').replace('€', '').replace('£', '').replace('$', '').replace(' ', '').strip()
         
-        # Skip if contains letters (except €)
+        # Skip if contains alphabetic characters (suggests non-numeric text like product names)
         if any(c.isalpha() for c in cleaned):
             return None
         
@@ -187,6 +187,52 @@ async def extract_price_from_element(page, element) -> Optional[float]:
         logger.debug(f"Element OCR extraction failed: {e}")
         return None
 
+
+async def extract_price_from_element_with_ocr_fallback(page, price_element, product_name: str = "", debug_mode: bool = False) -> Optional[float]:
+    """
+    Extract price from a DOM element, trying text extraction first and OCR as fallback.
+    
+    This is a high-level helper function that scrapers can use to extract prices
+    with automatic fallback to OCR when needed.
+    
+    Args:
+        page: Playwright page object
+        price_element: Playwright element handle containing the price
+        product_name: Optional product name for debug logging
+        debug_mode: Whether to enable debug logging
+        
+    Returns:
+        Extracted price as float, or 0.0 if extraction failed
+    """
+    price = 0.0
+    
+    try:
+        price_text = await price_element.inner_text()
+        
+        # Try to parse price from text using shared utility
+        if price_text and price_text.strip():
+            price = parse_price_text(price_text) or 0.0
+        
+        # If parsing failed, price might be in an image - try OCR
+        if price == 0.0:
+            if debug_mode and product_name:
+                logger.debug(f"  No price text found, trying OCR for '{product_name}'")
+            ocr_price = await try_ocr_price_extraction(page, price_element)
+            if ocr_price:
+                price = ocr_price
+                if debug_mode:
+                    logger.debug(f"  OCR extracted price: €{price}")
+    except (ValueError, AttributeError) as e:
+        # Price parsing failed, try OCR
+        if debug_mode and product_name:
+            logger.debug(f"  Price parsing failed for '{product_name}', trying OCR: {e}")
+        ocr_price = await try_ocr_price_extraction(page, price_element)
+        if ocr_price:
+            price = ocr_price
+            if debug_mode:
+                logger.debug(f"  OCR extracted price: €{price}")
+    
+    return price
 
 
 async def try_ocr_price_extraction(page, price_element) -> Optional[float]:
