@@ -121,10 +121,11 @@ def extract_price_from_image(image_data: bytes) -> Optional[float]:
         # Try multiple OCR configurations for better accuracy
         # PSM 7: Treat image as single text line (best for simple price tags)
         # PSM 8: Treat image as single word (fallback)
+        # Whitelist includes common currency symbols and numeric characters
         configs = [
-            '--psm 7 -c tessedit_char_whitelist=0123456789.,€',
-            '--psm 8 -c tessedit_char_whitelist=0123456789.,€',
-            '--psm 6 -c tessedit_char_whitelist=0123456789.,€',  # Single uniform block of text
+            '--psm 7 -c tessedit_char_whitelist=0123456789.,€£$',
+            '--psm 8 -c tessedit_char_whitelist=0123456789.,€£$',
+            '--psm 6 -c tessedit_char_whitelist=0123456789.,€£$',  # Single uniform block of text
         ]
         
         for config in configs:
@@ -188,7 +189,7 @@ async def extract_price_from_element(page, element) -> Optional[float]:
         return None
 
 
-async def extract_price_from_element_with_ocr_fallback(page, price_element, product_name: str = "", debug_mode: bool = False) -> Optional[float]:
+async def extract_price_from_element_with_ocr_fallback(page, price_element, product_name: str = "", debug_mode: bool = False) -> float:
     """
     Extract price from a DOM element, trying text extraction first and OCR as fallback.
     
