@@ -24,6 +24,9 @@ def parse_price_text(price_text: str) -> Optional[float]:
     Parse price from text string (extracted from DOM or OCR).
     Handles common price formats: €12.99, 12,99€, 12.99, etc.
     
+    This function handles both simple text prices from DOM elements and
+    potentially noisy OCR text from images.
+    
     Args:
         price_text: Text that may contain a price
         
@@ -33,19 +36,66 @@ def parse_price_text(price_text: str) -> Optional[float]:
     if not price_text:
         return None
     
+    # Try simple parsing first (for clean DOM text)
     try:
         # Clean up the text
         cleaned = price_text.replace('\n', '').replace('€', '').replace(' ', '').strip()
         
+        # Skip if contains letters (except €)
+        if any(c.isalpha() for c in cleaned):
+            return None
+        
         # Handle European format (comma as decimal separator)
+        # Only replace comma if it appears to be a decimal separator (has 2 digits after it)
         if ',' in cleaned:
-            cleaned = cleaned.replace(',', '.')
+            parts = cleaned.split(',')
+            if len(parts) == 2 and len(parts[1]) == 2:
+                # This looks like a decimal separator
+                cleaned = cleaned.replace(',', '.')
+            else:
+                # Might be a thousands separator, skip it
+                cleaned = cleaned.replace(',', '')
         
         # Parse as float
         price = float(cleaned)
-        return price
+        return price if price > 0 else None
     except (ValueError, AttributeError):
-        return None
+        pass
+    
+    # If simple parsing failed, try regex patterns (for noisy OCR text)
+    text = price_text.strip()
+    
+    # Pattern 1: €12.99 or 12.99€ (with decimal point for cents)
+    match = re.search(r'€?\s*(\d+)\.(\d{2})(?!\d)\s*€?', text)
+    if match:
+        try:
+            euros = int(match.group(1))
+            cents = int(match.group(2))
+            if 0 <= cents <= 99:
+                return float(f"{euros}.{cents:02d}")
+        except (ValueError, IndexError):
+            pass
+    
+    # Pattern 2: 12,99€ or €12,99 (with comma for cents - European format)
+    match = re.search(r'€?\s*(\d+),(\d{2})(?!\d)\s*€?', text)
+    if match:
+        try:
+            euros = int(match.group(1))
+            cents = int(match.group(2))
+            if 0 <= cents <= 99:
+                return float(f"{euros}.{cents:02d}")
+        except (ValueError, IndexError):
+            pass
+    
+    # Pattern 3: Whole euros only (€12 or 12€)
+    match = re.search(r'€?\s*(\d+)(?!\d*[.,]\d)\s*€?', text)
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            pass
+    
+    return None
 
 
 def extract_price_from_image(image_data: bytes) -> Optional[float]:
@@ -79,7 +129,7 @@ def extract_price_from_image(image_data: bytes) -> Optional[float]:
         
         for config in configs:
             text = pytesseract.image_to_string(image, config=config)
-            price = parse_price_from_text(text)
+            price = parse_price_text(text)
             if price:
                 return price
         
@@ -137,56 +187,6 @@ async def extract_price_from_element(page, element) -> Optional[float]:
         logger.debug(f"Element OCR extraction failed: {e}")
         return None
 
-
-def parse_price_from_text(text: str) -> Optional[float]:
-    """
-    Parse a price value from OCR-extracted text.
-    
-    Args:
-        text: OCR text that may contain a price
-        
-    Returns:
-        Extracted price as float, or None if no valid price found
-    """
-    if not text:
-        return None
-    
-    # Remove whitespace and normalize
-    text = text.strip()
-    
-    # Common patterns for prices (ordered from most specific to least specific)
-    # Pattern 1: €12.99 or 12.99€ (with decimal point for cents)
-    # Use word boundaries to avoid partial matches
-    match = re.search(r'€?\s*(\d+)\.(\d{2})(?!\d)\s*€?', text)
-    if match:
-        try:
-            euros = int(match.group(1))
-            cents = int(match.group(2))
-            if 0 <= cents <= 99:  # Validate cents are in valid range
-                return float(f"{euros}.{cents:02d}")
-        except (ValueError, IndexError):
-            pass
-    
-    # Pattern 2: 12,99€ or €12,99 (with comma for cents - European format)
-    match = re.search(r'€?\s*(\d+),(\d{2})(?!\d)\s*€?', text)
-    if match:
-        try:
-            euros = int(match.group(1))
-            cents = int(match.group(2))
-            if 0 <= cents <= 99:  # Validate cents are in valid range
-                return float(f"{euros}.{cents:02d}")
-        except (ValueError, IndexError):
-            pass
-    
-    # Pattern 3: Whole euros only (€12 or 12€)
-    match = re.search(r'€?\s*(\d+)(?!\d*[.,]\d)\s*€?', text)
-    if match:
-        try:
-            return float(match.group(1))
-        except ValueError:
-            pass
-    
-    return None
 
 
 async def try_ocr_price_extraction(page, price_element) -> Optional[float]:
