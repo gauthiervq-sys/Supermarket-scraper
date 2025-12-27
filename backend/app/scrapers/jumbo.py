@@ -36,9 +36,9 @@ async def scrape_jumbo(search_term: str):
                 link = f"https://www.jumbo.com/producten/{title_slug}-{prod_id}"
                 results.append({"store": "Jumbo", "name": p.get('title'), "price": float(price), "volume": p.get('quantity', ''), "image": img, "link": link})
     except Exception as e:
-        logger.warning(f"  Jumbo: Error: {e}")
-        if DEBUG_MODE:
-            logger.exception(f"  Jumbo: Full traceback:")
+            logger.warning(f"  Jumbo: Error: {e}")
+            if DEBUG_MODE:
+                logger.exception(f"  Jumbo: Exception details:")
     
     # Filter results to match search term
     search_lower = search_term.lower()

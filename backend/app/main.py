@@ -17,12 +17,20 @@ from app.scrapers.prikentik import scrape_prikentik
 from app.scrapers.small_shops import scrape_snuffelstore, scrape_drinkscorner
 
 # Configure logging based on DEBUG_MODE environment variable
+# This is done once at module load time
 DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 log_level = logging.DEBUG if DEBUG_MODE else logging.INFO
-logging.basicConfig(
-    level=log_level,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+
+# Only configure if logging hasn't been configured yet
+if not logging.getLogger().hasHandlers():
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+else:
+    # Update the level if already configured
+    logging.getLogger().setLevel(log_level)
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
