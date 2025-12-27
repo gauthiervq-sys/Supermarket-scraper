@@ -2,14 +2,20 @@ from playwright.async_api import async_playwright
 import urllib.parse
 import asyncio
 import logging
+import os
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
+DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
 
 async def scrape_lidl(search_term: str):
     results = []
-    print(f"🟡 Lidl: Scanning...")
+    safe_term = urllib.parse.quote(search_term)
+    url = f"https://www.lidl.be/q/nl-BE/search?q={safe_term}"
+    
+    logger.info(f"🟡 Lidl: Checking {url}")
+    
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
         context = await browser.new_context(
@@ -21,11 +27,15 @@ async def scrape_lidl(search_term: str):
         async def handle_response(response):
             url_lower = response.url.lower()
             if response.status == 200 and any(x in url_lower for x in ["search", "api", "product"]):
+                if DEBUG_MODE:
+                    logger.debug(f"  Lidl: Intercepted API call: {response.url[:80]}...")
                 try:
                     content_type = response.headers.get('content-type', '')
                     if 'application/json' in content_type:
                         data = await response.json()
                         prods = data.get('results', []) or data.get('products', []) or data.get('items', [])
+                        if DEBUG_MODE and prods:
+                            logger.debug(f"  Lidl: Found {len(prods)} products in API response")
                         for item in prods:
                             try:
                                 name = item.get('keyfacts', {}).get('title', '') or item.get('fullTitle', '') or item.get('name', '') or item.get('title', '')
@@ -46,28 +56,39 @@ async def scrape_lidl(search_term: str):
                                         "link": link
                                     })
                             except Exception as e:
-                                logger.debug(f"Error parsing Lidl product: {e}")
+                                if DEBUG_MODE:
+                                    logger.debug(f"  Lidl: Error parsing product: {e}")
                 except Exception as e:
-                    logger.debug(f"Error parsing Lidl response: {e}")
+                    if DEBUG_MODE:
+                        logger.debug(f"  Lidl: Error parsing response: {e}")
         
         page.on("response", handle_response)
-        safe_term = urllib.parse.quote(search_term)
         try:
-            await page.goto(f"https://www.lidl.be/q/nl-BE/search?q={safe_term}", timeout=12000)
+            await page.goto(url, timeout=12000)
             try:
                 accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=2000)
                 await accept_btn.click()
+                if DEBUG_MODE:
+                    logger.debug(f"  Lidl: Accepted cookies")
             except: pass
             # Wait for products with multiple selectors
             try:
                 await page.wait_for_selector('article, .product-item, .product-card', timeout=5000)
-            except: pass
+                if DEBUG_MODE:
+                    logger.debug(f"  Lidl: Products loaded on page")
+            except:
+                if DEBUG_MODE:
+                    logger.debug(f"  Lidl: No product elements found on page")
             # Wait for response handlers to complete processing
             await asyncio.sleep(2)
             
             # Fallback: scrape from DOM if no API results
             if not results:
+                if DEBUG_MODE:
+                    logger.debug(f"  Lidl: No API results, trying DOM scraping")
                 articles = await page.query_selector_all('article, .product-item')
+                if DEBUG_MODE:
+                    logger.debug(f"  Lidl: Found {len(articles)} product elements in DOM")
                 for article in articles:
                     try:
                         name_el = await article.query_selector('h3, h2, .product-title')
@@ -97,12 +118,18 @@ async def scrape_lidl(search_term: str):
                                 "link": link
                             })
                     except Exception as e:
-                        logger.debug(f"Error parsing Lidl product from DOM: {e}")
+                        if DEBUG_MODE:
+                            logger.debug(f"  Lidl: Error parsing product from DOM: {e}")
         except Exception as e:
-            logger.warning(f"Lidl navigation error: {e}")
+            logger.warning(f"  Lidl: Navigation error: {e}")
         await browser.close()
     
     # Filter results to match search term (case-insensitive partial match)
     search_lower = search_term.lower()
+    if DEBUG_MODE:
+        logger.debug(f"  Lidl: Found {len(results)} total results before filtering")
     filtered_results = [r for r in results if r.get('name') and search_lower in r['name'].lower()]
+    if DEBUG_MODE and len(results) != len(filtered_results):
+        logger.debug(f"  Lidl: Filtered to {len(filtered_results)} results matching '{search_term}'")
+    
     return filtered_results

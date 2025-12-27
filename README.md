@@ -10,6 +10,7 @@ A web application that scrapes and compares prices from multiple Belgian superma
 - 📊 Filter results by product size/volume
 - ⚡ Parallel scraping for faster results
 - 🎨 Modern, responsive UI with dark mode
+- 🐛 **Debug mode** to see what sites are being checked and troubleshoot scraping issues
 
 ## Prerequisites
 
@@ -239,6 +240,55 @@ curl "http://localhost:8100/search?q=cola"
 
 ## Troubleshooting
 
+### Debug Mode
+
+**Enable Debug Mode** to see detailed logging about what URLs are being checked and why scrapers might not be returning results.
+
+**To enable debug mode:**
+
+```bash
+# Set the DEBUG_MODE environment variable before starting the backend
+export DEBUG_MODE=true
+uvicorn app.main:app --host 0.0.0.0 --port 8100 --reload
+```
+
+**On Windows:**
+```bash
+set DEBUG_MODE=true
+uvicorn app.main:app --host 0.0.0.0 --port 8100 --reload
+```
+
+**With Docker Compose:**
+
+Add the environment variable to `docker-compose.yml`:
+```yaml
+backend:
+  environment:
+    - DEBUG_MODE=true
+```
+
+**What debug mode shows:**
+- ✅ The exact URL being checked for each supermarket
+- 🔍 Number of products found before and after filtering
+- ⏱️ Timing information for each scraper
+- 🐛 Detailed error messages with stack traces
+- 📊 API response interceptions and parsing details
+
+**Example debug output:**
+```
+2025-12-27 19:47:27,334 - app.main - INFO - ============================================================
+2025-12-27 19:47:27,334 - app.main - INFO - 🚦 NEW SEARCH REQUEST: 'cola'
+2025-12-27 19:47:27,334 - app.main - INFO - ============================================================
+2025-12-27 19:47:27,335 - app.scrapers.colruyt - INFO - 🛒 Colruyt: Checking https://www.collectandgo.be/nl/zoek?searchTerm=cola
+2025-12-27 19:47:27,335 - app.scrapers.ah - INFO - 🛒 Albert Heijn: Checking https://www.ah.be/zoeken?query=cola
+2025-12-27 19:47:28,633 - app.scrapers.colruyt - DEBUG -   Colruyt: Found 15 total results before filtering
+2025-12-27 19:47:28,633 - app.scrapers.colruyt - DEBUG -   Colruyt: Filtered to 12 results matching 'cola'
+2025-12-27 19:47:29,446 - app.main - INFO - ============================================================
+2025-12-27 19:47:29,446 - app.main - INFO - ✅ SEARCH COMPLETED in 2.11s
+2025-12-27 19:47:29,446 - app.main - INFO - 📊 Total products found: 48
+2025-12-27 19:47:29,446 - app.main - INFO - 🏪 Successful scrapers: 10/10
+```
+
 ### Backend Issues
 
 **Issue:** `playwright: command not found`
@@ -249,6 +299,9 @@ curl "http://localhost:8100/search?q=cola"
 
 **Issue:** Import errors or module not found
 - **Solution:** Make sure you're in the virtual environment and have installed all requirements
+
+**Issue:** No products found for a search that should have results
+- **Solution:** Enable DEBUG_MODE to see what URLs are being checked and what errors might be occurring
 
 ### Frontend Issues
 

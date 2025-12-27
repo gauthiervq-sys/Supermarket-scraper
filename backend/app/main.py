@@ -2,6 +2,8 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import logging
+import os
+import time
 from app.utils import calculate_price_per_liter, parse_volume_from_text, parse_unit_count, parse_unit_size
 
 from app.scrapers.colruyt import scrape_colruyt
@@ -14,8 +16,21 @@ from app.scrapers.carrefour import scrape_carrefour
 from app.scrapers.prikentik import scrape_prikentik
 from app.scrapers.small_shops import scrape_snuffelstore, scrape_drinkscorner
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging based on DEBUG_MODE environment variable
+# This is done once at module load time
+DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
+log_level = logging.DEBUG if DEBUG_MODE else logging.INFO
+
+# Only configure if logging hasn't been configured yet
+if not logging.getLogger().hasHandlers():
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+else:
+    # Update the level if already configured
+    logging.getLogger().setLevel(log_level)
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
@@ -33,16 +48,48 @@ sem = asyncio.Semaphore(MAX_CONCURRENT_BROWSERS)
 
 async def run_scraper_safe(scraper_func, q):
     async with sem:
+        scraper_name = scraper_func.__name__.replace('scrape_', '').replace('_', ' ').title()
+        start_time = time.time()
+        logger.info(f"🔍 Starting scraper: {scraper_name}")
+        
         try:
             # Add overall timeout per scraper to prevent hanging
             results = await asyncio.wait_for(scraper_func(q), timeout=15.0)
-            return {"success": True, "results": results, "scraper": scraper_func.__name__}
+            elapsed = time.time() - start_time
+            
+            if DEBUG_MODE:
+                logger.debug(f"✅ {scraper_name} completed in {elapsed:.2f}s - Found {len(results)} products")
+            else:
+                logger.info(f"✅ {scraper_name} - {len(results)} products in {elapsed:.2f}s")
+            
+            return {
+                "success": True,
+                "results": results,
+                "scraper": scraper_func.__name__,
+                "elapsed_time": round(elapsed, 2)
+            }
         except asyncio.TimeoutError:
-            logger.warning(f"⏱️ Timeout in scraper: {scraper_func.__name__}")
-            return {"success": False, "results": [], "scraper": scraper_func.__name__, "error": "Timeout"}
+            elapsed = time.time() - start_time
+            logger.warning(f"⏱️ Timeout in {scraper_name} after {elapsed:.2f}s")
+            return {
+                "success": False,
+                "results": [],
+                "scraper": scraper_func.__name__,
+                "error": "Timeout",
+                "elapsed_time": round(elapsed, 2)
+            }
         except Exception as e:
-            logger.error(f"❌ Error in scraper {scraper_func.__name__}: {e}")
-            return {"success": False, "results": [], "scraper": scraper_func.__name__, "error": str(e)}
+            elapsed = time.time() - start_time
+            logger.error(f"❌ Error in {scraper_name} after {elapsed:.2f}s: {e}")
+            if DEBUG_MODE:
+                logger.exception(f"Full traceback for {scraper_name}:")
+            return {
+                "success": False,
+                "results": [],
+                "scraper": scraper_func.__name__,
+                "error": str(e),
+                "elapsed_time": round(elapsed, 2)
+            }
 
 # Store logos using more reliable CDN sources
 STORE_LOGOS = {
@@ -60,15 +107,21 @@ STORE_LOGOS = {
 
 @app.get("/search")
 async def search_products(q: str = Query(..., min_length=2)):
-    logger.info(f"--- 🚦 Start Veilige Zoekopdracht: {q} ---")
+    logger.info(f"{'='*60}")
+    logger.info(f"🚦 NEW SEARCH REQUEST: '{q}'")
+    logger.info(f"{'='*60}")
+    
     scrapers = [
         scrape_colruyt, scrape_ah, scrape_aldi, 
         scrape_delhaize, scrape_lidl, scrape_jumbo, 
         scrape_carrefour, scrape_prikentik, 
         scrape_snuffelstore, scrape_drinkscorner
     ]
+    
+    search_start_time = time.time()
     tasks = [run_scraper_safe(s, q) for s in scrapers]
     results = await asyncio.gather(*tasks)
+    total_elapsed = time.time() - search_start_time
     
     # Track scraper statuses
     scraper_statuses = []
@@ -77,12 +130,15 @@ async def search_products(q: str = Query(..., min_length=2)):
     for res in results:
         if res and isinstance(res, dict):
             scraper_name = res.get('scraper', '').replace('scrape_', '').replace('_', ' ').title()
-            scraper_statuses.append({
+            status_info = {
                 "name": scraper_name,
                 "success": res.get('success', False),
                 "error": res.get('error', None),
-                "count": len(res.get('results', []))
-            })
+                "count": len(res.get('results', [])),
+                "elapsed_time": res.get('elapsed_time', 0)
+            }
+            scraper_statuses.append(status_info)
+            
             if res.get('results') and isinstance(res.get('results'), list):
                 all_products.extend(res.get('results'))
     
@@ -119,9 +175,20 @@ async def search_products(q: str = Query(..., min_length=2)):
     
     all_products = [p for p in all_products if p['price'] > 0]
     all_products.sort(key=lambda x: x['price_per_liter'] if x['price_per_liter'] > 0 else 999)
-    logger.info(f"✅ Found {len(all_products)} products")
+    
+    logger.info(f"{'='*60}")
+    logger.info(f"✅ SEARCH COMPLETED in {total_elapsed:.2f}s")
+    logger.info(f"📊 Total products found: {len(all_products)}")
+    logger.info(f"🏪 Successful scrapers: {sum(1 for s in scraper_statuses if s['success'])}/{len(scraper_statuses)}")
+    if DEBUG_MODE:
+        for status in scraper_statuses:
+            logger.debug(f"  • {status['name']}: {'✓' if status['success'] else '✗'} "
+                        f"({status['count']} products, {status['elapsed_time']}s)")
+    logger.info(f"{'='*60}")
     
     return {
         "products": all_products,
-        "scraperStatuses": scraper_statuses
+        "scraperStatuses": scraper_statuses,
+        "totalElapsedTime": round(total_elapsed, 2),
+        "debugMode": DEBUG_MODE
     }
