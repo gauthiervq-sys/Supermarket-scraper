@@ -2,14 +2,20 @@ from playwright.async_api import async_playwright
 import urllib.parse
 import asyncio
 import logging
+import os
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
+DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
 
 async def scrape_delhaize(search_term: str):
     results = []
-    print(f"🦁 Delhaize: Scanning...")
+    safe_term = urllib.parse.quote(search_term)
+    url = f"https://www.delhaize.be/nl/shop/search?q={safe_term}"
+    
+    logger.info(f"🦁 Delhaize: Checking {url}")
+    
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
         context = await browser.new_context(
@@ -21,11 +27,15 @@ async def scrape_delhaize(search_term: str):
         async def handle_response(response):
             url_lower = response.url.lower()
             if response.status == 200 and any(x in url_lower for x in ["search", "product"]):
+                if DEBUG_MODE:
+                    logger.debug(f"  Delhaize: Intercepted API call: {response.url[:80]}...")
                 try:
                     content_type = response.headers.get('content-type', '')
                     if 'application/json' in content_type:
                         data = await response.json()
                         items = data.get('products', []) or data.get('results', []) or data.get('items', [])
+                        if DEBUG_MODE and items:
+                            logger.debug(f"  Delhaize: Found {len(items)} products in API response")
                         for item in items:
                             try:
                                 name = item.get('name', item.get('title', 'Naamloos'))
@@ -53,28 +63,39 @@ async def scrape_delhaize(search_term: str):
                                         "link": link
                                     })
                             except Exception as e:
-                                logger.debug(f"Error parsing Delhaize product: {e}")
+                                if DEBUG_MODE:
+                                    logger.debug(f"  Delhaize: Error parsing product: {e}")
                 except Exception as e:
-                    logger.debug(f"Error parsing Delhaize response: {e}")
+                    if DEBUG_MODE:
+                        logger.debug(f"  Delhaize: Error parsing response: {e}")
         
         page.on("response", handle_response)
-        safe_term = urllib.parse.quote(search_term)
         try:
-            await page.goto(f"https://www.delhaize.be/nl/shop/search?q={safe_term}", timeout=12000)
+            await page.goto(url, timeout=12000)
             try:
                 accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=2000)
                 await accept_btn.click()
+                if DEBUG_MODE:
+                    logger.debug(f"  Delhaize: Accepted cookies")
             except: pass
             # Wait for products with multiple selectors
             try:
                 await page.wait_for_selector('li[data-test="product-card"], .product-card, .product-item', timeout=5000)
-            except: pass
+                if DEBUG_MODE:
+                    logger.debug(f"  Delhaize: Products loaded on page")
+            except:
+                if DEBUG_MODE:
+                    logger.debug(f"  Delhaize: No product elements found on page")
             # Wait for response handlers to complete processing
             await asyncio.sleep(2)
             
             # Fallback: scrape from DOM if no API results
             if not results:
+                if DEBUG_MODE:
+                    logger.debug(f"  Delhaize: No API results, trying DOM scraping")
                 cards = await page.query_selector_all('li[data-test="product-card"], .product-card, .product-item')
+                if DEBUG_MODE:
+                    logger.debug(f"  Delhaize: Found {len(cards)} product cards in DOM")
                 for card in cards:
                     try:
                         name_el = await card.query_selector('[data-test="product-title"], .product-title, h3, h2')
@@ -104,12 +125,18 @@ async def scrape_delhaize(search_term: str):
                                 "link": link
                             })
                     except Exception as e:
-                        logger.debug(f"Error parsing Delhaize product from DOM: {e}")
+                        if DEBUG_MODE:
+                            logger.debug(f"  Delhaize: Error parsing product from DOM: {e}")
         except Exception as e:
-            logger.warning(f"Delhaize navigation error: {e}")
+            logger.warning(f"  Delhaize: Navigation error: {e}")
         await browser.close()
     
     # Filter results to match search term (case-insensitive partial match)
     search_lower = search_term.lower()
+    if DEBUG_MODE:
+        logger.debug(f"  Delhaize: Found {len(results)} total results before filtering")
     filtered_results = [r for r in results if r.get('name') and search_lower in r['name'].lower()]
+    if DEBUG_MODE and len(results) != len(filtered_results):
+        logger.debug(f"  Delhaize: Filtered to {len(filtered_results)} results matching '{search_term}'")
+    
     return filtered_results

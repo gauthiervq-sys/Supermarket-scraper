@@ -2,14 +2,20 @@ from playwright.async_api import async_playwright
 import urllib.parse
 import asyncio
 import logging
+import os
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
+DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
 
 async def scrape_prikentik(search_term: str):
     results = []
-    print(f"🍺 Prik&Tik: Scanning...")
+    safe_term = urllib.parse.quote(search_term)
+    url = f"https://www.prikentik.be/catalogsearch/result/?q={safe_term}"
+    
+    logger.info(f"🍺 Prik&Tik: Checking {url}")
+    
     async with async_playwright() as p:
         try:
             browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
@@ -18,17 +24,22 @@ async def scrape_prikentik(search_term: str):
             )
             page = await context.new_page()
             page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
-            safe_term = urllib.parse.quote(search_term)
-            await page.goto(f"https://www.prikentik.be/catalogsearch/result/?q={safe_term}", timeout=12000)
+            await page.goto(url, timeout=12000)
             try:
                 accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler, .cookie-accept', timeout=2000)
                 await accept_btn.click()
+                if DEBUG_MODE:
+                    logger.debug(f"  Prik&Tik: Accepted cookies")
             except: pass
             
             # Wait for products to load
             try: 
                 await page.wait_for_selector('.product-item, .product-items', timeout=5000)
-            except: pass
+                if DEBUG_MODE:
+                    logger.debug(f"  Prik&Tik: Products loaded on page")
+            except:
+                if DEBUG_MODE:
+                    logger.debug(f"  Prik&Tik: No product elements found on page")
             
             # Allow lazy loading to complete
             await asyncio.sleep(1)
@@ -38,6 +49,8 @@ async def scrape_prikentik(search_term: str):
             await asyncio.sleep(1)
             
             products = await page.query_selector_all('.product-item, li.product-item')
+            if DEBUG_MODE:
+                logger.debug(f"  Prik&Tik: Found {len(products)} product elements on page")
             for prod in products:
                 try:
                     name_el = await prod.query_selector('.product-item-link, .product-name a, a.product-item-link')
@@ -83,12 +96,18 @@ async def scrape_prikentik(search_term: str):
                         "link": link
                     })
                 except Exception as e:
-                    logger.debug(f"Error parsing Prik&Tik product: {e}")
+                    if DEBUG_MODE:
+                        logger.debug(f"  Prik&Tik: Error parsing product: {e}")
             await browser.close()
         except Exception as e:
-            logger.warning(f"Prik&Tik scraping error: {e}")
+            logger.warning(f"  Prik&Tik: Scraping error: {e}")
     
     # Filter results to match search term (case-insensitive partial match)
     search_lower = search_term.lower()
+    if DEBUG_MODE:
+        logger.debug(f"  Prik&Tik: Found {len(results)} total results before filtering")
     filtered_results = [r for r in results if r.get('name') and search_lower in r['name'].lower()]
+    if DEBUG_MODE and len(results) != len(filtered_results):
+        logger.debug(f"  Prik&Tik: Filtered to {len(filtered_results)} results matching '{search_term}'")
+    
     return filtered_results
