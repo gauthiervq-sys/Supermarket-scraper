@@ -24,41 +24,47 @@ async def scrape_prikentik(search_term: str):
             )
             page = await context.new_page()
             page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
-            await page.goto(url, timeout=12000)
+            await page.goto(url, timeout=15000, wait_until="networkidle")
+            if DEBUG_MODE:
+                logger.debug(f"  Prik&Tik: Page loaded, waiting for content")
+            
             try:
                 accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler, .cookie-accept', timeout=2000)
                 await accept_btn.click()
+                await asyncio.sleep(0.5)
                 if DEBUG_MODE:
                     logger.debug(f"  Prik&Tik: Accepted cookies")
             except: pass
             
             # Wait for products to load
             try: 
-                await page.wait_for_selector('.product-item, .product-items', timeout=5000)
+                await page.wait_for_selector('.product-item, .product-items, .products-grid', timeout=6000)
                 if DEBUG_MODE:
                     logger.debug(f"  Prik&Tik: Products loaded on page")
             except:
                 if DEBUG_MODE:
                     logger.debug(f"  Prik&Tik: No product elements found on page")
             
-            # Allow lazy loading to complete
-            await asyncio.sleep(1)
-            
             # Scroll to trigger lazy loading
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+            await asyncio.sleep(1)
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             await asyncio.sleep(1)
             
-            products = await page.query_selector_all('.product-item, li.product-item')
+            # Additional wait for lazy loading to complete
+            await asyncio.sleep(2)
+            
+            products = await page.query_selector_all('.product-item, li.product-item, .item.product')
             if DEBUG_MODE:
                 logger.debug(f"  Prik&Tik: Found {len(products)} product elements on page")
             for prod in products:
                 try:
-                    name_el = await prod.query_selector('.product-item-link, .product-name a, a.product-item-link')
+                    name_el = await prod.query_selector('.product-item-link, .product-name a, a.product-item-link, .product-item-name a')
                     name = await name_el.inner_text() if name_el else ""
                     if not name:
                         continue
                         
-                    price_el = await prod.query_selector('.price, .price-wrapper .price')
+                    price_el = await prod.query_selector('.price, .price-wrapper .price, [data-price-type="finalPrice"]')
                     price = 0.0
                     if price_el:
                         price_text = await price_el.inner_text()
@@ -67,7 +73,7 @@ async def scrape_prikentik(search_term: str):
                     link = await name_el.get_attribute('href') if name_el else ""
                     
                     # Try multiple image selectors and attributes for lazy loading
-                    img_el = await prod.query_selector('.product-image-photo, img.photo, .product-item-photo img')
+                    img_el = await prod.query_selector('.product-image-photo, img.photo, .product-item-photo img, img')
                     img = ""
                     if img_el:
                         # Try various lazy loading attributes first, breaking early when found

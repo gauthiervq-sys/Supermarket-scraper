@@ -23,11 +23,14 @@ async def scrape_ah(search_term: str):
         page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
         await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         
+        api_responses_received = []
+        
         async def handle_response(response):
             url_lower = response.url.lower()
-            if response.status == 200 and any(x in url_lower for x in ["search", "product", "zoeken"]):
+            if response.status == 200 and any(x in url_lower for x in ["search", "product", "zoeken", "api"]):
+                api_responses_received.append(response.url)
                 if DEBUG_MODE:
-                    logger.debug(f"  AH: Intercepted API call: {response.url[:80]}...")
+                    logger.debug(f"  AH: Intercepted API call: {response.url[:100]}...")
                 try:
                     content_type = response.headers.get('content-type', '')
                     if 'application/json' in content_type:
@@ -93,22 +96,35 @@ async def scrape_ah(search_term: str):
         
         page.on("response", handle_response)
         try:
-            await page.goto(url, timeout=12000)
+            await page.goto(url, timeout=15000, wait_until="networkidle")
+            if DEBUG_MODE:
+                logger.debug(f"  AH: Page loaded, waiting for content")
+            
             try:
                 await page.click('#accept-cookies', timeout=2000)
+                await asyncio.sleep(0.5)
                 if DEBUG_MODE:
                     logger.debug(f"  AH: Accepted cookies")
             except: pass
+            
             # Wait for products to load with multiple selectors
             try:
-                await page.wait_for_selector('article[data-test-id="product-card"], .product-card, [data-testid="product"]', timeout=5000)
+                await page.wait_for_selector('article[data-test-id="product-card"], .product-card, [data-testid="product"], article', timeout=6000)
                 if DEBUG_MODE:
                     logger.debug(f"  AH: Products loaded on page")
             except:
                 if DEBUG_MODE:
                     logger.debug(f"  AH: No product elements found on page")
+            
+            # Scroll to trigger lazy loading
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+            await asyncio.sleep(1)
+            
             # Wait for response handlers to complete processing
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
+            
+            if DEBUG_MODE:
+                logger.debug(f"  AH: Received {len(api_responses_received)} API responses")
         except Exception as e:
             logger.warning(f"  AH: Navigation error: {e}")
         await browser.close()
