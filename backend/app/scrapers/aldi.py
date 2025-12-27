@@ -20,13 +20,17 @@ async def scrape_aldi(search_term: str):
         page = await browser.new_page()
         page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
         try:
-            await page.goto(url, timeout=12000)
+            await page.goto(url, timeout=15000, wait_until="networkidle")
+            if DEBUG_MODE:
+                logger.debug(f"  Aldi: Page loaded, waiting for content")
+            
             try:
                 await page.click('#onetrust-accept-btn-handler', timeout=2000)
                 if DEBUG_MODE:
                     logger.debug(f"  Aldi: Accepted cookies")
             except: pass
-            await page.wait_for_selector('.mod-article-tile', timeout=5000)
+            
+            await page.wait_for_selector('.mod-article-tile', timeout=6000)
             products = await page.query_selector_all('.mod-article-tile')
             if DEBUG_MODE:
                 logger.debug(f"  Aldi: Found {len(products)} product elements on page")

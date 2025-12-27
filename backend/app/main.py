@@ -53,8 +53,8 @@ async def run_scraper_safe(scraper_func, q):
         logger.info(f"🔍 Starting scraper: {scraper_name}")
         
         try:
-            # Add overall timeout per scraper to prevent hanging
-            results = await asyncio.wait_for(scraper_func(q), timeout=15.0)
+            # Add overall timeout per scraper to prevent hanging - increased to accommodate longer wait times
+            results = await asyncio.wait_for(scraper_func(q), timeout=25.0)
             elapsed = time.time() - start_time
             
             if DEBUG_MODE:

@@ -24,12 +24,15 @@ async def scrape_colruyt(search_term: str):
         page = await context.new_page()
         page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
         
+        api_responses_received = []
+        
         async def handle_response(response):
             # Look for various API endpoints that might contain product data
             url_lower = response.url.lower()
-            if response.status == 200 and any(x in url_lower for x in ["productview", "search", "product"]):
+            if response.status == 200 and any(x in url_lower for x in ["productview", "search", "product", "article", "zoek"]):
+                api_responses_received.append(response.url)
                 if DEBUG_MODE:
-                    logger.debug(f"  Colruyt: Intercepted API call: {response.url[:80]}...")
+                    logger.debug(f"  Colruyt: Intercepted API call: {response.url[:100]}...")
                 try:
                     content_type = response.headers.get('content-type', '')
                     if 'application/json' in content_type:
@@ -74,23 +77,36 @@ async def scrape_colruyt(search_term: str):
         
         page.on("response", handle_response)
         try:
-            await page.goto(url, timeout=12000)
+            await page.goto(url, timeout=15000, wait_until="networkidle")
+            if DEBUG_MODE:
+                logger.debug(f"  Colruyt: Page loaded, waiting for content")
+            
             try:
                 accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=2000)
                 await accept_btn.click()
+                await asyncio.sleep(0.5)
                 if DEBUG_MODE:
                     logger.debug(f"  Colruyt: Accepted cookies")
             except: pass
-            # Wait for products to load
+            
+            # Wait for products to load with multiple attempts
             try:
-                await page.wait_for_selector('.product-card, .product-item, [data-testid="product"]', timeout=5000)
+                await page.wait_for_selector('.product-card, .product-item, [data-testid="product"], article', timeout=6000)
                 if DEBUG_MODE:
                     logger.debug(f"  Colruyt: Products loaded on page")
             except:
                 if DEBUG_MODE:
                     logger.debug(f"  Colruyt: No product elements found on page")
-            # Wait for response handlers to complete processing
-            await asyncio.sleep(2)
+            
+            # Scroll to trigger lazy loading
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+            await asyncio.sleep(1)
+            
+            # Wait longer for response handlers to complete processing
+            await asyncio.sleep(3)
+            
+            if DEBUG_MODE:
+                logger.debug(f"  Colruyt: Received {len(api_responses_received)} API responses")
         except Exception as e:
             logger.warning(f"  Colruyt: Navigation error: {e}")
         await browser.close()

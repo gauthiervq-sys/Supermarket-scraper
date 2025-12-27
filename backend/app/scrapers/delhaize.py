@@ -24,11 +24,14 @@ async def scrape_delhaize(search_term: str):
         page = await context.new_page()
         page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
         
+        api_responses_received = []
+        
         async def handle_response(response):
             url_lower = response.url.lower()
-            if response.status == 200 and any(x in url_lower for x in ["search", "product"]):
+            if response.status == 200 and any(x in url_lower for x in ["search", "product", "api", "graphql"]):
+                api_responses_received.append(response.url)
                 if DEBUG_MODE:
-                    logger.debug(f"  Delhaize: Intercepted API call: {response.url[:80]}...")
+                    logger.debug(f"  Delhaize: Intercepted API call: {response.url[:100]}...")
                 try:
                     content_type = response.headers.get('content-type', '')
                     if 'application/json' in content_type:
@@ -71,36 +74,49 @@ async def scrape_delhaize(search_term: str):
         
         page.on("response", handle_response)
         try:
-            await page.goto(url, timeout=12000)
+            await page.goto(url, timeout=15000, wait_until="networkidle")
+            if DEBUG_MODE:
+                logger.debug(f"  Delhaize: Page loaded, waiting for content")
+            
             try:
                 accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler', timeout=2000)
                 await accept_btn.click()
+                await asyncio.sleep(0.5)
                 if DEBUG_MODE:
                     logger.debug(f"  Delhaize: Accepted cookies")
             except: pass
+            
             # Wait for products with multiple selectors
             try:
-                await page.wait_for_selector('li[data-test="product-card"], .product-card, .product-item', timeout=5000)
+                await page.wait_for_selector('li[data-test="product-card"], .product-card, .product-item, article', timeout=6000)
                 if DEBUG_MODE:
                     logger.debug(f"  Delhaize: Products loaded on page")
             except:
                 if DEBUG_MODE:
                     logger.debug(f"  Delhaize: No product elements found on page")
-            # Wait for response handlers to complete processing
-            await asyncio.sleep(2)
+            
+            # Scroll to trigger lazy loading
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+            await asyncio.sleep(1)
+            
+            # Wait longer for response handlers to complete processing
+            await asyncio.sleep(3)
+            
+            if DEBUG_MODE:
+                logger.debug(f"  Delhaize: Received {len(api_responses_received)} API responses")
             
             # Fallback: scrape from DOM if no API results
             if not results:
                 if DEBUG_MODE:
                     logger.debug(f"  Delhaize: No API results, trying DOM scraping")
-                cards = await page.query_selector_all('li[data-test="product-card"], .product-card, .product-item')
+                cards = await page.query_selector_all('li[data-test="product-card"], .product-card, .product-item, article')
                 if DEBUG_MODE:
                     logger.debug(f"  Delhaize: Found {len(cards)} product cards in DOM")
                 for card in cards:
                     try:
-                        name_el = await card.query_selector('[data-test="product-title"], .product-title, h3, h2')
+                        name_el = await card.query_selector('[data-test="product-title"], .product-title, h3, h2, a')
                         name = await name_el.inner_text() if name_el else ""
-                        price_el = await card.query_selector('[data-test="price"], .price')
+                        price_el = await card.query_selector('[data-test="price"], .price, [class*="price"]')
                         price = 0.0
                         if price_el:
                             price_txt = await price_el.inner_text()

@@ -20,7 +20,10 @@ async def scrape_woocommerce(store_name, base_url, search_term):
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
             page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
-            await page.goto(url, timeout=15000)
+            await page.goto(url, timeout=15000, wait_until="networkidle")
+            if DEBUG_MODE:
+                logger.debug(f"  {store_name}: Page loaded, waiting for content")
+            
             try:
                 await page.wait_for_selector('.product', timeout=6000)
                 if DEBUG_MODE:
