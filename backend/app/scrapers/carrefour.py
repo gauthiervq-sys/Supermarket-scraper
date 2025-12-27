@@ -3,6 +3,7 @@ import urllib.parse
 import asyncio
 import logging
 import os
+from app.ocr_utils import extract_price_from_element_with_ocr_fallback
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -113,11 +114,10 @@ async def scrape_carrefour(search_term: str):
                         name_el = await card.query_selector('.product-card__title, .product-title, h3, h2, a')
                         name = await name_el.inner_text() if name_el else "Naamloos"
                         price_el = await card.query_selector('.product-card-price__price, .price, [data-testid="price"], [class*="price"]')
+                        price = 0.0
                         if price_el:
-                            price_txt = await price_el.inner_text()
-                            price = float(price_txt.replace('\n', '').replace('€', '').replace(',', '.').strip())
-                        else:
-                            price = 0.0
+                            price = await extract_price_from_element_with_ocr_fallback(page, price_el, name, DEBUG_MODE)
+                        
                         link_el = await card.query_selector('a.product-card__title-link, a')
                         link_href = await link_el.get_attribute('href') if link_el else ""
                         if link_href and not link_href.startswith('http'):

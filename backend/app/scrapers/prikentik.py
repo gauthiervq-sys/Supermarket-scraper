@@ -3,6 +3,7 @@ import urllib.parse
 import asyncio
 import logging
 import os
+from app.ocr_utils import extract_price_from_element_with_ocr_fallback
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -67,8 +68,7 @@ async def scrape_prikentik(search_term: str):
                     price_el = await prod.query_selector('.price, .price-wrapper .price, [data-price-type="finalPrice"]')
                     price = 0.0
                     if price_el:
-                        price_text = await price_el.inner_text()
-                        price = float(price_text.replace('€', '').replace(',', '.').strip())
+                        price = await extract_price_from_element_with_ocr_fallback(page, price_el, name, DEBUG_MODE)
                     
                     link = await name_el.get_attribute('href') if name_el else ""
                     
