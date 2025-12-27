@@ -3,7 +3,7 @@ import urllib.parse
 import asyncio
 import logging
 import os
-from app.ocr_utils import try_ocr_price_extraction
+from app.ocr_utils import try_ocr_price_extraction, parse_price_text
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -70,10 +70,12 @@ async def scrape_prikentik(search_term: str):
                     if price_el:
                         try:
                             price_text = await price_el.inner_text()
+                            # Try to parse price from text using shared utility
                             if price_text and price_text.strip():
-                                price = float(price_text.replace('€', '').replace(',', '.').strip())
-                            else:
-                                # If no text, price might be in an image - try OCR
+                                price = parse_price_text(price_text) or 0.0
+                            
+                            # If parsing failed, price might be in an image - try OCR
+                            if price == 0.0:
                                 if DEBUG_MODE:
                                     logger.debug(f"  Prik&Tik: No price text found, trying OCR for '{name}'")
                                 ocr_price = await try_ocr_price_extraction(page, price_el)

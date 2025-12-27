@@ -19,6 +19,35 @@ except ImportError:
     logger.warning("OCR libraries not available. Install pytesseract and Pillow to enable OCR functionality.")
 
 
+def parse_price_text(price_text: str) -> Optional[float]:
+    """
+    Parse price from text string (extracted from DOM or OCR).
+    Handles common price formats: €12.99, 12,99€, 12.99, etc.
+    
+    Args:
+        price_text: Text that may contain a price
+        
+    Returns:
+        Extracted price as float, or None if parsing failed
+    """
+    if not price_text:
+        return None
+    
+    try:
+        # Clean up the text
+        cleaned = price_text.replace('\n', '').replace('€', '').replace(' ', '').strip()
+        
+        # Handle European format (comma as decimal separator)
+        if ',' in cleaned:
+            cleaned = cleaned.replace(',', '.')
+        
+        # Parse as float
+        price = float(cleaned)
+        return price
+    except (ValueError, AttributeError):
+        return None
+
+
 def extract_price_from_image(image_data: bytes) -> Optional[float]:
     """
     Extract price from an image using OCR.
