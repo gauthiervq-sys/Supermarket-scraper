@@ -100,7 +100,7 @@ cd frontend
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173` (or another port if 5173 is busy)
+The frontend will be available at `http://localhost:3100` (or another port if 3100 is busy)
 
 ### Option 2: Docker Compose (Easiest)
 
@@ -113,10 +113,10 @@ docker-compose up --build
 
 This will:
 - Build and start the backend on port 8100
-- Build and start the frontend on port 5173
+- Build and start the frontend on port 3100
 - Handle all dependencies automatically
 
-Access the application at `http://localhost:5173`
+Access the application at `http://localhost:3100`
 
 To stop the containers:
 ```bash
@@ -199,7 +199,7 @@ Supermarket-scraper/
 
 ## Usage
 
-1. **Open the application** in your web browser (default: `http://localhost:5173`)
+1. **Open the application** in your web browser (default: `http://localhost:3100`)
 2. **Enter a product name** in the search box (e.g., "cola zero", "jupiler", "milk")
 3. **Click "Zoeken 🔎"** or press Enter
 4. **Wait for results** - the app will scan all 10 supermarkets (takes ~10-20 seconds)
@@ -305,7 +305,7 @@ backend:
 
 ### Frontend Issues
 
-**Issue:** Port 5173 is already in use
+**Issue:** Port 3100 is already in use
 - **Solution:** Vite will automatically use the next available port
 
 **Issue:** Cannot connect to backend
@@ -317,7 +317,7 @@ backend:
 ### Docker Issues
 
 **Issue:** Docker containers won't start
-- **Solution:** Make sure Docker Desktop is running and ports 8100 and 5173 are available
+- **Solution:** Make sure Docker Desktop is running and ports 8100 and 3100 are available
 
 **Issue:** Changes not reflected in Docker
 - **Solution:** Rebuild the containers: `docker-compose up --build`
