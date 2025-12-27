@@ -39,12 +39,22 @@ def extract_price_from_image(image_data: bytes) -> Optional[float]:
         # Convert to grayscale for better OCR accuracy
         image = image.convert('L')
         
-        # Perform OCR
-        text = pytesseract.image_to_string(image, config='--psm 7 -c tessedit_char_whitelist=0123456789.,€')
+        # Try multiple OCR configurations for better accuracy
+        # PSM 7: Treat image as single text line (best for simple price tags)
+        # PSM 8: Treat image as single word (fallback)
+        configs = [
+            '--psm 7 -c tessedit_char_whitelist=0123456789.,€',
+            '--psm 8 -c tessedit_char_whitelist=0123456789.,€',
+            '--psm 6 -c tessedit_char_whitelist=0123456789.,€',  # Single uniform block of text
+        ]
         
-        # Extract price from OCR text
-        price = parse_price_from_text(text)
-        return price
+        for config in configs:
+            text = pytesseract.image_to_string(image, config=config)
+            price = parse_price_from_text(text)
+            if price:
+                return price
+        
+        return None
     except Exception as e:
         logger.debug(f"OCR extraction failed: {e}")
         return None
@@ -115,27 +125,37 @@ def parse_price_from_text(text: str) -> Optional[float]:
     # Remove whitespace and normalize
     text = text.strip()
     
-    # Common patterns for prices
-    patterns = [
-        r'€?\s*(\d+)[,.](\d{2})',  # €12.99 or 12,99
-        r'(\d+)[,.](\d{2})\s*€?',  # 12.99€ or 12,99
-        r'€?\s*(\d+)',              # €12 or 12
-    ]
+    # Common patterns for prices (ordered from most specific to least specific)
+    # Pattern 1: €12.99 or 12.99€ (with decimal point for cents)
+    # Use word boundaries to avoid partial matches
+    match = re.search(r'€?\s*(\d+)\.(\d{2})(?!\d)\s*€?', text)
+    if match:
+        try:
+            euros = int(match.group(1))
+            cents = int(match.group(2))
+            if 0 <= cents <= 99:  # Validate cents are in valid range
+                return float(f"{euros}.{cents:02d}")
+        except (ValueError, IndexError):
+            pass
     
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            try:
-                if len(match.groups()) == 2:
-                    # Has cents
-                    euros = int(match.group(1))
-                    cents = int(match.group(2))
-                    return float(f"{euros}.{cents:02d}")
-                else:
-                    # Whole euros only
-                    return float(match.group(1))
-            except (ValueError, IndexError):
-                continue
+    # Pattern 2: 12,99€ or €12,99 (with comma for cents - European format)
+    match = re.search(r'€?\s*(\d+),(\d{2})(?!\d)\s*€?', text)
+    if match:
+        try:
+            euros = int(match.group(1))
+            cents = int(match.group(2))
+            if 0 <= cents <= 99:  # Validate cents are in valid range
+                return float(f"{euros}.{cents:02d}")
+        except (ValueError, IndexError):
+            pass
+    
+    # Pattern 3: Whole euros only (€12 or 12€)
+    match = re.search(r'€?\s*(\d+)(?!\d*[.,]\d)\s*€?', text)
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            pass
     
     return None
 
