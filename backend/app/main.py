@@ -5,6 +5,7 @@ import logging
 import os
 import time
 from app.utils import calculate_price_per_liter, parse_volume_from_text, parse_unit_count, parse_unit_size
+from app import database
 
 from app.scrapers.colruyt import scrape_colruyt
 from app.scrapers.ah import scrape_ah
@@ -176,6 +177,13 @@ async def search_products(q: str = Query(..., min_length=2)):
     all_products = [p for p in all_products if p['price'] > 0]
     all_products.sort(key=lambda x: x['price_per_liter'] if x['price_per_liter'] > 0 else 999)
     
+    # Save products to database
+    try:
+        saved_count = database.save_products_batch(all_products, q)
+        logger.info(f"💾 Saved {saved_count} products to database")
+    except Exception as e:
+        logger.error(f"Failed to save products to database: {e}")
+    
     logger.info(f"{'='*60}")
     logger.info(f"✅ SEARCH COMPLETED in {total_elapsed:.2f}s")
     logger.info(f"📊 Total products found: {len(all_products)}")
@@ -192,3 +200,85 @@ async def search_products(q: str = Query(..., min_length=2)):
         "totalElapsedTime": round(total_elapsed, 2),
         "debugMode": DEBUG_MODE
     }
+
+
+@app.get("/products")
+async def get_saved_products(
+    search_term: str = Query(None, description="Filter by search term"),
+    store: str = Query(None, description="Filter by store name"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of products to return"),
+    offset: int = Query(0, ge=0, description="Number of products to skip")
+):
+    """
+    Retrieve products from the database.
+    
+    Query parameters:
+    - search_term: Filter products by the search term used
+    - store: Filter products by store name
+    - limit: Maximum number of products to return (1-1000)
+    - offset: Number of products to skip for pagination
+    """
+    try:
+        if search_term:
+            products = database.get_products_by_search_term(search_term, limit)
+        elif store:
+            products = database.get_products_by_store(store, limit)
+        else:
+            products = database.get_all_products(limit, offset)
+        
+        return {
+            "products": products,
+            "count": len(products),
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving products from database: {e}")
+        return {
+            "products": [],
+            "count": 0,
+            "error": str(e)
+        }
+
+
+@app.get("/database/stats")
+async def get_database_statistics():
+    """
+    Get statistics about the database.
+    
+    Returns information about:
+    - Total number of products stored
+    - Products per store
+    - Unique search terms
+    - Most recent scrape timestamp
+    """
+    try:
+        stats = database.get_database_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting database stats: {e}")
+        return {
+            "error": str(e)
+        }
+
+
+@app.delete("/database/cleanup")
+async def cleanup_old_products(days: int = Query(7, ge=1, le=365, description="Delete products older than this many days")):
+    """
+    Delete products older than specified number of days.
+    
+    Query parameters:
+    - days: Number of days to keep products (default: 7)
+    """
+    try:
+        deleted_count = database.delete_old_products(days)
+        return {
+            "message": f"Deleted {deleted_count} products older than {days} days",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        logger.error(f"Error cleaning up database: {e}")
+        return {
+            "error": str(e),
+            "deleted_count": 0
+        }

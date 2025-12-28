@@ -11,6 +11,8 @@ A web application that scrapes and compares prices from multiple Belgian superma
 - ⚡ Parallel scraping for faster results
 - 🎨 Modern, responsive UI with dark mode
 - 🐛 **Debug mode** to see what sites are being checked and troubleshoot scraping issues
+- 💾 **Database storage** - All scraped products are automatically saved to a database
+- 🔗 **Enhanced scraping** - Visits individual product pages for more complete information
 
 ## Prerequisites
 
@@ -217,7 +219,7 @@ Supermarket-scraper/
 
 ### `GET /search`
 
-Search for products across all supermarkets.
+Search for products across all supermarkets. Results are automatically saved to the database.
 
 **Query Parameters:**
 - `q` (required): Search term (minimum 2 characters)
@@ -229,19 +231,132 @@ curl "http://localhost:8100/search?q=cola"
 
 **Response:**
 ```json
-[
-  {
-    "store": "Colruyt",
-    "name": "Coca Cola Zero 1.5L",
-    "price": 1.99,
-    "volume": "1.5L",
-    "image": "https://...",
-    "link": "https://...",
-    "logo": "https://...",
-    "price_per_liter": 1.33,
-    "liter_value": 1.5
-  }
-]
+{
+  "products": [
+    {
+      "store": "Colruyt",
+      "name": "Coca Cola Zero 1.5L",
+      "price": 1.99,
+      "volume": "1.5L",
+      "image": "https://...",
+      "link": "https://...",
+      "logo": "https://...",
+      "price_per_liter": 1.33,
+      "liter_value": 1.5
+    }
+  ],
+  "scraperStatuses": [...],
+  "totalElapsedTime": 12.5,
+  "debugMode": false
+}
+```
+
+### `GET /products`
+
+Retrieve products from the database.
+
+**Query Parameters:**
+- `search_term` (optional): Filter by search term
+- `store` (optional): Filter by store name (e.g., "Aldi", "Colruyt")
+- `limit` (optional, default: 100): Maximum number of products to return (1-1000)
+- `offset` (optional, default: 0): Number of products to skip for pagination
+
+**Examples:**
+```bash
+# Get all products
+curl "http://localhost:8100/products"
+
+# Get products from a specific search
+curl "http://localhost:8100/products?search_term=cola"
+
+# Get products from a specific store
+curl "http://localhost:8100/products?store=Aldi"
+
+# Get products with pagination
+curl "http://localhost:8100/products?limit=50&offset=100"
+```
+
+**Response:**
+```json
+{
+  "products": [...],
+  "count": 50,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+### `GET /database/stats`
+
+Get statistics about the database.
+
+**Example:**
+```bash
+curl "http://localhost:8100/database/stats"
+```
+
+**Response:**
+```json
+{
+  "total_products": 1523,
+  "products_per_store": {
+    "Colruyt": 245,
+    "Aldi": 189,
+    "Lidl": 203,
+    ...
+  },
+  "unique_search_terms": 45,
+  "most_recent_scrape": "2025-12-28 18:45:00",
+  "database_path": "products.db"
+}
+```
+
+### `DELETE /database/cleanup`
+
+Delete old products from the database.
+
+**Query Parameters:**
+- `days` (optional, default: 7): Delete products older than this many days (1-365)
+
+**Example:**
+```bash
+# Delete products older than 7 days
+curl -X DELETE "http://localhost:8100/database/cleanup?days=7"
+```
+
+**Response:**
+```json
+{
+  "message": "Deleted 150 products older than 7 days",
+  "deleted_count": 150
+}
+```
+
+## Database
+
+The application uses SQLite to store all scraped product information. The database file (`products.db`) is created automatically in the backend directory when you first run the application.
+
+**Features:**
+- Automatic storage of all search results
+- Query products by search term, store, or get all products
+- Database statistics and cleanup utilities
+- Indexed for fast queries
+- No external database server required
+
+**Database Schema:**
+```sql
+products (
+  id, store, name, price, volume, image, link,
+  price_per_liter, liter_value, unit_count, unit_size, unit_type, price_per_unit,
+  search_term, scraped_at, updated_at
+)
+```
+
+**Configuration:**
+You can configure the database path using the `DB_PATH` environment variable:
+```bash
+export DB_PATH=/path/to/your/database.db
+uvicorn app.main:app --host 0.0.0.0 --port 8100
 ```
 
 ## Troubleshooting
