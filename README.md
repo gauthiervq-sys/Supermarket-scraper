@@ -507,7 +507,11 @@ backend:
 
 **What debug mode shows:**
 - ✅ The exact URL being checked for each supermarket
+- 📄 HTML content length received from each website
+- 📝 Actual text content scraped from the page (first/last 500 chars)
+- ⚠️  Detection of JavaScript-rendered sites that may need special handling
 - 🔍 Number of products found before and after filtering
+- 🏗️ HTML structure analysis when no products are found (element list + raw HTML)
 - ⏱️ Timing information for each scraper
 - 🐛 Detailed error messages with stack traces
 - 📊 API response interceptions and parsing details
@@ -519,6 +523,10 @@ backend:
 2025-12-27 19:47:27,334 - app.main - INFO - ============================================================
 2025-12-27 19:47:27,335 - app.scrapers.colruyt - INFO - 🛒 Colruyt: Checking https://www.collectandgo.be/nl/zoek?searchTerm=cola
 2025-12-27 19:47:27,335 - app.scrapers.ah - INFO - 🛒 Albert Heijn: Checking https://www.ah.be/zoeken?query=cola
+2025-12-27 19:47:28,120 - app.scrapers.colruyt - DEBUG -   Colruyt: Page loaded successfully
+2025-12-27 19:47:28,120 - app.scrapers.colruyt - DEBUG -   Colruyt: HTML content length: 45678 characters
+2025-12-27 19:47:28,121 - app.scrapers.colruyt - DEBUG -   Colruyt: Page body text (first 500 chars): Collect&Go - Online boodschappen...
+2025-12-27 19:47:28,121 - app.scrapers.colruyt - DEBUG -   Colruyt: ⚠️  Site appears to use JavaScript rendering
 2025-12-27 19:47:28,633 - app.scrapers.colruyt - DEBUG -   Colruyt: Found 15 total results before filtering
 2025-12-27 19:47:28,633 - app.scrapers.colruyt - DEBUG -   Colruyt: Filtered to 12 results matching 'cola'
 2025-12-27 19:47:29,446 - app.main - INFO - ============================================================
@@ -526,6 +534,21 @@ backend:
 2025-12-27 19:47:29,446 - app.main - INFO - 📊 Total products found: 48
 2025-12-27 19:47:29,446 - app.main - INFO - 🏪 Successful scrapers: 10/10
 ```
+
+**New in this version - Enhanced HTML Content Logging:**
+
+When a scraper finds no products, DEBUG_MODE will now show:
+```
+2025-12-28 20:00:00,000 - app.scrapers.carrefour - DEBUG -   Carrefour: Found 0 product cards in DOM
+2025-12-28 20:00:00,001 - app.scrapers.carrefour - DEBUG -   Carrefour: First 20 HTML elements found: <html>, <head>, <meta>, <title>, <script>...
+2025-12-28 20:00:00,001 - app.scrapers.carrefour - DEBUG -   Carrefour: Raw HTML structure (first 1000 chars): <!DOCTYPE html><html>...
+```
+
+This helps diagnose:
+- Whether the website is actually returning content
+- If the site requires JavaScript to render (most common issue)
+- If CSS selectors need to be updated to match the HTML structure
+- If the site is blocking automated requests
 
 ### Backend Issues
 
