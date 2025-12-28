@@ -4,14 +4,16 @@ A web application that scrapes and compares prices from multiple Belgian superma
 
 ## ⚡ Recent Improvements
 
-**Migrated to BeautifulSoup for Better Performance!**
+**Migrated to Go with go-rod/rod for Better Performance and Reliability!**
 
-The scraping engine has been completely rewritten to use BeautifulSoup instead of Playwright:
-- ✅ **3-4x faster** scraping (5-10 seconds vs 15-20 seconds)
-- ✅ **Much lighter** on system resources (no browser required)
-- ✅ **Simpler installation** (no Playwright or Tesseract OCR needed)
-- ✅ **More reliable** with better error handling
-- ✅ **Easier to maintain** with cleaner, simpler code
+The scraping engine has been completely rewritten in Go using the go-rod/rod library:
+- ✅ **Concurrent scraping** with proper goroutine management
+- ✅ **Native browser automation** with Rod (Chrome DevTools Protocol)
+- ✅ **Better performance** with Go's speed and efficiency
+- ✅ **Improved reliability** with proper error handling and timeouts
+- ✅ **Type safety** with Go's strong typing system
+- ✅ **Easy deployment** with single binary compilation
+- ✅ **Lower memory footprint** compared to Python-based solutions
 
 ## Features
 
@@ -19,19 +21,20 @@ The scraping engine has been completely rewritten to use BeautifulSoup instead o
 - 💰 Price comparison with price-per-liter/kg calculations
 - 🏪 Store logos and product images
 - 📊 Filter results by product size/volume
-- ⚡ Parallel scraping for faster results
+- ⚡ Parallel scraping for faster results (up to 5 concurrent scrapers)
 - 🎨 Modern, responsive UI with dark mode
 - 🐛 **Debug mode** to see what sites are being checked and troubleshoot scraping issues
-- 💾 **Database storage** - All scraped products are automatically saved to a database
-- 🔗 **Enhanced scraping** - Uses BeautifulSoup for fast, lightweight HTML parsing
+- 💾 **Database storage** - All scraped products are automatically saved to a SQLite database
+- 🔗 **Enhanced scraping** - Uses go-rod/rod for reliable browser automation
 
 ## Prerequisites
 
 Before you begin, ensure you have the following installed:
 
-- **Python 3.8+** - [Download Python](https://www.python.org/downloads/)
+- **Go 1.24+** - [Download Go](https://golang.org/dl/)
 - **Node.js 16+** and **npm** - [Download Node.js](https://nodejs.org/)
 - **Git** - [Download Git](https://git-scm.com/downloads/)
+- **Chromium or Chrome browser** - Required for Rod browser automation
 
 Optional (for containerized deployment):
 - **Docker** and **Docker Compose** - [Download Docker](https://www.docker.com/get-started)
@@ -45,24 +48,18 @@ git clone https://github.com/gauthiervq-sys/Supermarket-scraper.git
 cd Supermarket-scraper
 ```
 
-### 2. Backend Setup
+### 2. Backend Setup (Go)
 
-Navigate to the backend directory and set up the Python environment:
+Navigate to the backend directory and set up the Go environment:
 
 ```bash
 cd backend
 
-# Create a virtual environment (recommended)
-python -m venv venv
+# Download Go dependencies
+go mod download
 
-# Activate the virtual environment
-# On Windows:
-venv\Scripts\activate
-# On macOS/Linux:
-source venv/bin/activate
-
-# Install Python dependencies
-pip install -r requirements.txt
+# Build the application
+go build -o supermarket-scraper main.go
 ```
 
 ### 3. Frontend Setup
@@ -88,15 +85,30 @@ You need to run both the backend and frontend servers simultaneously.
 # From the backend directory
 cd backend
 
-# Activate virtual environment if not already activated
-# Windows: venv\Scripts\activate
-# macOS/Linux: source venv/bin/activate
+# Run the Go application
+./supermarket-scraper
+# Or on Windows:
+# supermarket-scraper.exe
 
-# Run the FastAPI server
-uvicorn app.main:app --host 0.0.0.0 --port 8100 --reload
+# The server will start on port 8100 by default
 ```
 
 The backend API will be available at `http://localhost:8100`
+
+**Optional environment variables:**
+```bash
+# Enable debug mode for detailed logging
+export DEBUG_MODE=true
+
+# Set custom port (default is 8100)
+export PORT=8200
+
+# Set custom database path (default is products.db)
+export DB_PATH=/path/to/database.db
+
+# Then run the server
+./supermarket-scraper
+```
 
 #### Start the Frontend Server
 
@@ -145,19 +157,19 @@ git pull origin main
 
 # Update backend dependencies
 cd backend
-pip install -r requirements.txt --upgrade
+go mod download
+go build -o supermarket-scraper main.go
 
 # Update frontend dependencies
 cd ../frontend
 npm install
 ```
 
-### Update Python Dependencies
+### Rebuild Go Application
 
 ```bash
 cd backend
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-pip install -r requirements.txt --upgrade
+go build -o supermarket-scraper main.go
 ```
 
 ### Update Node.js Dependencies
@@ -172,20 +184,15 @@ npm update
 ```
 Supermarket-scraper/
 ├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI application entry point
-│   │   ├── utils.py             # Utility functions (price calculations)
-│   │   └── scrapers/            # Individual scraper modules
-│   │       ├── colruyt.py
-│   │       ├── ah.py
-│   │       ├── aldi.py
-│   │       ├── delhaize.py
-│   │       ├── lidl.py
-│   │       ├── jumbo.py
-│   │       ├── carrefour.py
-│   │       ├── prikentik.py
-│   │       └── small_shops.py
-│   ├── requirements.txt         # Python dependencies
+│   ├── main.go                  # Main application entry point
+│   ├── go.mod                   # Go module dependencies
+│   ├── go.sum                   # Go module checksums
+│   ├── utils/
+│   │   └── utils.go             # Utility functions (price calculations, parsing)
+│   ├── database/
+│   │   └── database.go          # SQLite database operations
+│   ├── scrapers/
+│   │   └── scrapers.go          # Scraper implementations using go-rod
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
@@ -447,34 +454,34 @@ conn.close()
 
 ## Enhanced Scraping
 
-### Individual Product Page Visits
+### Browser Automation with go-rod/rod
 
-Some scrapers (Aldi, Prik&Tik) have been enhanced to visit individual product pages instead of only scraping search results. This provides several benefits:
+All scrapers now use go-rod/rod for browser automation instead of HTTP requests with BeautifulSoup. This provides several benefits:
 
 **Advantages:**
-- ✅ **Better price accuracy**: Prices on product pages are displayed as text rather than images
-- ✅ **More complete information**: Product pages contain detailed specifications
-- ✅ **Simpler scraping**: Direct HTML parsing with BeautifulSoup
-- ✅ **More reliable data**: Less prone to changes in search result page layouts
-- ✅ **Faster and lighter**: No browser overhead, just HTTP requests
+- ✅ **Better JavaScript handling**: Rod executes JavaScript on pages, ensuring dynamic content loads
+- ✅ **More accurate scraping**: Interacts with pages like a real browser
+- ✅ **Chrome DevTools Protocol**: Uses the native Chrome protocol for efficient automation
+- ✅ **Concurrent scraping**: Go's goroutines enable efficient parallel scraping
+- ✅ **Better debugging**: Rod provides excellent debugging capabilities
+- ✅ **Headless mode**: Runs without displaying browser windows
 
 **How it works:**
-1. Scraper sends HTTP request to search results page
-2. Parses HTML with BeautifulSoup to collect product links
-3. Visits each product detail page via HTTP
-4. Extracts complete product information from HTML
-5. Returns consolidated results
+1. Rod launches a headless Chrome/Chromium browser instance
+2. Each scraper navigates to the store's search results page
+3. Waits for page content to load (including JavaScript)
+4. Extracts product information from the DOM
+5. Filters results to match the search term
+6. Returns consolidated results
 
 **Performance considerations:**
-- Individual page visits are done via lightweight HTTP requests (not browsers)
-- Much faster than Playwright-based scraping
-- Lower memory footprint
-- Timeout settings ensure scrapers don't hang indefinitely
+- Up to 5 concurrent browser instances run simultaneously (configurable)
+- Each scraper has a timeout to prevent hanging
+- Browser instances are properly cleaned up after use
+- Memory efficient with proper resource management
 
 **Which scrapers use this approach:**
-- **Aldi**: Visits product detail pages for complete info
-- **Prik&Tik**: Visits product detail pages for accurate prices
-- **All other scrapers**: Use direct HTML parsing with BeautifulSoup
+- **All scrapers**: Colruyt, Albert Heijn, Aldi, Delhaize, Lidl, Jumbo, Carrefour, Prik&Tik, Snuffelstore, Drinks Corner
 
 ## Troubleshooting
 
@@ -487,13 +494,13 @@ Some scrapers (Aldi, Prik&Tik) have been enhanced to visit individual product pa
 ```bash
 # Set the DEBUG_MODE environment variable before starting the backend
 export DEBUG_MODE=true
-uvicorn app.main:app --host 0.0.0.0 --port 8100 --reload
+./supermarket-scraper
 ```
 
 **On Windows:**
 ```bash
 set DEBUG_MODE=true
-uvicorn app.main:app --host 0.0.0.0 --port 8100 --reload
+supermarket-scraper.exe
 ```
 
 **With Docker Compose:**
@@ -507,60 +514,45 @@ backend:
 
 **What debug mode shows:**
 - ✅ The exact URL being checked for each supermarket
-- 📄 HTML content length received from each website
-- 📝 Actual text content scraped from the page (first/last 500 chars)
-- ⚠️  Detection of JavaScript-rendered sites that may need special handling
+- 📄 Page loading status and any errors
+- 📝 Number of product elements found on each page
+- ⚠️  Browser automation details and timing
 - 🔍 Number of products found before and after filtering
-- 🏗️ HTML structure analysis when no products are found (element list + raw HTML)
 - ⏱️ Timing information for each scraper
 - 🐛 Detailed error messages with stack traces
-- 📊 API response interceptions and parsing details
 
 **Example debug output:**
 ```
-2025-12-27 19:47:27,334 - app.main - INFO - ============================================================
-2025-12-27 19:47:27,334 - app.main - INFO - 🚦 NEW SEARCH REQUEST: 'cola'
-2025-12-27 19:47:27,334 - app.main - INFO - ============================================================
-2025-12-27 19:47:27,335 - app.scrapers.colruyt - INFO - 🛒 Colruyt: Checking https://www.collectandgo.be/nl/zoek?searchTerm=cola
-2025-12-27 19:47:27,335 - app.scrapers.ah - INFO - 🛒 Albert Heijn: Checking https://www.ah.be/zoeken?query=cola
-2025-12-27 19:47:28,120 - app.scrapers.colruyt - DEBUG -   Colruyt: Page loaded successfully
-2025-12-27 19:47:28,120 - app.scrapers.colruyt - DEBUG -   Colruyt: HTML content length: 45678 characters
-2025-12-27 19:47:28,121 - app.scrapers.colruyt - DEBUG -   Colruyt: Page body text (first 500 chars): Collect&Go - Online boodschappen...
-2025-12-27 19:47:28,121 - app.scrapers.colruyt - DEBUG -   Colruyt: ⚠️  Site appears to use JavaScript rendering
-2025-12-27 19:47:28,633 - app.scrapers.colruyt - DEBUG -   Colruyt: Found 15 total results before filtering
-2025-12-27 19:47:28,633 - app.scrapers.colruyt - DEBUG -   Colruyt: Filtered to 12 results matching 'cola'
-2025-12-27 19:47:29,446 - app.main - INFO - ============================================================
-2025-12-27 19:47:29,446 - app.main - INFO - ✅ SEARCH COMPLETED in 2.11s
-2025-12-27 19:47:29,446 - app.main - INFO - 📊 Total products found: 48
-2025-12-27 19:47:29,446 - app.main - INFO - 🏪 Successful scrapers: 10/10
+2025-12-28 20:00:00 - INFO - ============================================================
+2025-12-28 20:00:00 - INFO - 🚦 NEW SEARCH REQUEST: 'cola'
+2025-12-28 20:00:00 - INFO - ============================================================
+2025-12-28 20:00:00 - INFO - 🛒 Colruyt: Checking https://www.collectandgo.be/nl/zoek?searchTerm=cola
+2025-12-28 20:00:00 - INFO - 🔍 Starting scraper: Colruyt
+2025-12-28 20:00:02 - DEBUG -   Colruyt: Page loaded successfully
+2025-12-28 20:00:02 - DEBUG -   Colruyt: Found 15 product cards with selector .product-card
+2025-12-28 20:00:02 - DEBUG -   Colruyt: Found 15 total results before filtering
+2025-12-28 20:00:02 - DEBUG -   Colruyt: Filtered to 12 results matching 'cola'
+2025-12-28 20:00:02 - INFO - ✅ Colruyt completed in 2.34s - Found 12 products
+2025-12-28 20:00:10 - INFO - ============================================================
+2025-12-28 20:00:10 - INFO - ✅ SEARCH COMPLETED in 10.23s
+2025-12-28 20:00:10 - INFO - 📊 Total products found: 48
+2025-12-28 20:00:10 - INFO - 🏪 Successful scrapers: 10/10
 ```
-
-**New in this version - Enhanced HTML Content Logging:**
-
-When a scraper finds no products, DEBUG_MODE will now show:
-```
-2025-12-28 20:00:00,000 - app.scrapers.carrefour - DEBUG -   Carrefour: Found 0 product cards in DOM
-2025-12-28 20:00:00,001 - app.scrapers.carrefour - DEBUG -   Carrefour: First 20 HTML elements found: <html>, <head>, <meta>, <title>, <script>...
-2025-12-28 20:00:00,001 - app.scrapers.carrefour - DEBUG -   Carrefour: Raw HTML structure (first 1000 chars): <!DOCTYPE html><html>...
-```
-
-This helps diagnose:
-- Whether the website is actually returning content
-- If the site requires JavaScript to render (most common issue)
-- If CSS selectors need to be updated to match the HTML structure
-- If the site is blocking automated requests
 
 ### Backend Issues
 
 **Issue:** Port 8100 is already in use
-- **Solution:** Change the port in the uvicorn command: `--port 8101`
+- **Solution:** Change the port using the PORT environment variable: `PORT=8101 ./supermarket-scraper`
 
-**Issue:** Import errors or module not found
-- **Solution:** Make sure you're in the virtual environment and have installed all requirements
+**Issue:** Build errors or module not found
+- **Solution:** Make sure you've run `go mod download` and have Go 1.24+ installed
 
 **Issue:** No products found for a search that should have results
-- **Solution:** Enable DEBUG_MODE to see what URLs are being checked and what errors might be occurring
-- **Note:** Some websites may block requests or have changed their HTML structure
+- **Solution:** Enable DEBUG_MODE to see what's happening with the browser automation
+- **Note:** Some websites may have changed their HTML structure or may block automated access
+
+**Issue:** Browser/Chromium not found
+- **Solution:** Install Chromium or Chrome browser on your system. Rod will automatically detect it.
 
 ### Frontend Issues
 
@@ -583,11 +575,12 @@ This helps diagnose:
 
 ## Performance Notes
 
-- Searches typically complete in 5-10 seconds with BeautifulSoup-based scraping
-- Scrapers run in parallel with controlled concurrency to prevent overwhelming the system
-- HTTP requests are much faster and lighter than browser-based scraping
-- Some stores may timeout or fail occasionally due to network issues or website changes
-- BeautifulSoup with lxml parser provides fast and efficient HTML parsing
+- Searches typically complete in 10-15 seconds with go-rod browser automation
+- Up to 5 scrapers run in parallel with controlled concurrency
+- Each scraper has a timeout to prevent hanging indefinitely
+- Browser instances are properly cleaned up after each scrape
+- Go's efficient memory management keeps resource usage low
+- SQLite database provides fast local storage without external dependencies
 
 ## Contributing
 
@@ -611,8 +604,8 @@ For issues or questions:
 
 ## Acknowledgments
 
-- Built with FastAPI, React, BeautifulSoup, and Vite
+- Built with Go, React, go-rod/rod, and Vite
 - Uses Tailwind CSS for styling
-- Uses httpx for async HTTP requests
-- Uses lxml for efficient HTML parsing
+- Uses go-rod for browser automation (Chrome DevTools Protocol)
+- Uses SQLite for local database storage
 - Scrapes data from Belgian supermarket websites
