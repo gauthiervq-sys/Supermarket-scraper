@@ -87,3 +87,48 @@ def extract_price_from_text(price_text: str) -> float:
         pass
     
     return 0.0
+
+def parse_price_from_element_text(element_text: str) -> float:
+    """
+    Parse price from HTML element text.
+    Removes currency symbols and converts to float.
+    
+    Args:
+        element_text: Text from HTML element containing price
+        
+    Returns:
+        Parsed price as float, or 0.0 if parsing fails
+    """
+    if not element_text:
+        return 0.0
+    
+    # Remove currency symbols and convert to float
+    price_txt = re.sub(r'[^\d,.]', '', element_text)
+    price_txt = price_txt.replace(',', '.')
+    try:
+        return float(price_txt)
+    except ValueError:
+        return 0.0
+
+def complete_url(url: str, base_url: str) -> str:
+    """
+    Complete a relative URL to an absolute URL.
+    
+    Args:
+        url: URL to complete (may be relative or absolute)
+        base_url: Base URL to use (e.g., "https://www.example.com")
+        
+    Returns:
+        Complete absolute URL
+    """
+    if not url:
+        return ""
+    
+    if url.startswith('http'):
+        return url
+    elif url.startswith('//'):
+        return f"https:{url}"
+    elif url.startswith('/'):
+        return f"{base_url.rstrip('/')}{url}"
+    else:
+        return f"{base_url.rstrip('/')}/{url}"

@@ -1,11 +1,11 @@
-from playwright.async_api import async_playwright
+import httpx
+from bs4 import BeautifulSoup
 import urllib.parse
 import logging
 import os
+import re
 from app.utils import extract_price_from_text
 
-# Default page timeout in milliseconds
-DEFAULT_PAGE_TIMEOUT = 10000
 DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
 
@@ -16,41 +16,34 @@ async def scrape_aldi(search_term: str):
     
     logger.info(f"🛒 Aldi: Checking {url}")
     
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context()
-        page = await context.new_page()
-        page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
-        
-        try:
-            await page.goto(url, timeout=15000, wait_until="networkidle")
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            # Get search results page
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            
             if DEBUG_MODE:
-                logger.debug(f"  Aldi: Page loaded, waiting for content")
+                logger.debug(f"  Aldi: Page loaded successfully")
             
-            try:
-                await page.click('#onetrust-accept-btn-handler', timeout=2000)
-                if DEBUG_MODE:
-                    logger.debug(f"  Aldi: Accepted cookies")
-            except: pass
+            soup = BeautifulSoup(response.text, 'html.parser')
+            products = soup.select('.mod-article-tile')
             
-            await page.wait_for_selector('.mod-article-tile', timeout=6000)
-            products = await page.query_selector_all('.mod-article-tile')
             if DEBUG_MODE:
                 logger.debug(f"  Aldi: Found {len(products)} product tiles on search page")
             
             # Collect product links from search results
             product_links = []
-            for p in products:
-                try:
-                    link_el = await p.query_selector('a')
-                    link_href = await link_el.get_attribute('href') if link_el else ""
-                    if link_href:
-                        if not link_href.startswith('http'):
-                            link_href = f"https://www.aldi.be{link_href}"
-                        product_links.append(link_href)
-                except Exception as e:
-                    if DEBUG_MODE:
-                        logger.debug(f"  Aldi: Error extracting link: {e}")
+            for prod in products:
+                link_el = prod.select_one('a')
+                if link_el and link_el.get('href'):
+                    link_href = link_el.get('href')
+                    if not link_href.startswith('http'):
+                        link_href = f"https://www.aldi.be{link_href}"
+                    product_links.append(link_href)
             
             if DEBUG_MODE:
                 logger.debug(f"  Aldi: Collected {len(product_links)} product links, visiting each...")
@@ -58,39 +51,36 @@ async def scrape_aldi(search_term: str):
             # Visit each product page to extract detailed information
             for idx, product_url in enumerate(product_links):
                 try:
-                    detail_page = await context.new_page()
-                    detail_page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
-                    
-                    await detail_page.goto(product_url, timeout=15000, wait_until="domcontentloaded")
+                    detail_response = await client.get(product_url, headers=headers)
+                    detail_response.raise_for_status()
+                    detail_soup = BeautifulSoup(detail_response.text, 'html.parser')
                     
                     # Extract product name
-                    name = ""
-                    name_el = await detail_page.query_selector('h1, .product-title, .mod-article-tile__title')
-                    if name_el:
-                        name = await name_el.inner_text()
+                    name_el = detail_soup.select_one('h1, .product-title, .mod-article-tile__title')
+                    name = name_el.get_text(strip=True) if name_el else ""
                     
                     # Extract price from detail page
                     price = 0.0
-                    price_wrapper = await detail_page.query_selector('.price__wrapper, .price, [class*="price"]')
+                    price_wrapper = detail_soup.select_one('.price__wrapper, .price, [class*="price"]')
                     if price_wrapper:
-                        price_text = await price_wrapper.inner_text()
+                        price_text = price_wrapper.get_text(strip=True)
                         price = extract_price_from_text(price_text)
                     
                     # Extract volume/quantity
                     volume = ""
-                    quantity_el = await detail_page.query_selector('.mod-article-tile__quantity, .product-quantity, [class*="quantity"]')
+                    quantity_el = detail_soup.select_one('.mod-article-tile__quantity, .product-quantity, [class*="quantity"]')
                     if quantity_el:
-                        volume = await quantity_el.inner_text()
+                        volume = quantity_el.get_text(strip=True)
                     if not volume:
-                        subtitle_el = await detail_page.query_selector('.mod-article-tile__subtitle, .product-subtitle')
+                        subtitle_el = detail_soup.select_one('.mod-article-tile__subtitle, .product-subtitle')
                         if subtitle_el:
-                            volume = await subtitle_el.inner_text()
+                            volume = subtitle_el.get_text(strip=True)
                     
                     # Extract image
                     img_src = ""
-                    img_el = await detail_page.query_selector('img.product-image, .product-image img, img')
+                    img_el = detail_soup.select_one('img.product-image, .product-image img, img')
                     if img_el:
-                        img_src = await img_el.get_attribute('src') or ""
+                        img_src = img_el.get('src', img_el.get('data-src', ''))
                         if img_src and not img_src.startswith('http'):
                             img_src = f"https://www.aldi.be{img_src}"
                     
@@ -107,19 +97,14 @@ async def scrape_aldi(search_term: str):
                         if DEBUG_MODE:
                             logger.debug(f"  Aldi: [{idx+1}/{len(product_links)}] Extracted: {name[:50]} - €{price}")
                     
-                    await detail_page.close()
-                    
                 except Exception as e:
                     if DEBUG_MODE:
                         logger.debug(f"  Aldi: Error scraping product page {product_url}: {e}")
-                    try:
-                        await detail_page.close()
-                    except:
-                        pass
                         
-        except Exception as e:
-            logger.warning(f"  Aldi: Navigation error: {e}")
-        await browser.close()
+    except Exception as e:
+        logger.warning(f"  Aldi: Navigation error: {e}")
+        if DEBUG_MODE:
+            logger.exception(f"  Aldi: Exception details:")
     
     # Filter results to match search term
     search_lower = search_term.lower()
