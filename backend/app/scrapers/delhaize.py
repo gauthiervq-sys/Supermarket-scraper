@@ -26,12 +26,35 @@ async def scrape_delhaize(search_term: str):
             
             if DEBUG_MODE:
                 logger.debug(f"  Delhaize: Page loaded successfully")
+                logger.debug(f"  Delhaize: HTML content length: {len(response.text)} characters")
             
             soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Log the actual text content to help diagnose issues
+            if DEBUG_MODE:
+                body = soup.find('body')
+                if body:
+                    body_text = body.get_text(strip=True, separator=' ')
+                    logger.debug(f"  Delhaize: Page body text (first 500 chars): {body_text[:500]}")
+                    logger.debug(f"  Delhaize: Page body text (last 500 chars): {body_text[-500:]}")
+                else:
+                    logger.debug(f"  Delhaize: No <body> tag found in HTML")
+                
+                # Check for JavaScript-rendered content indicators
+                if any(indicator in response.text for indicator in ['window.__', 'React', 'Vue', 'Angular', '__NEXT_DATA__']):
+                    logger.debug(f"  Delhaize: ⚠️  Site appears to use JavaScript rendering")
+            
             cards = soup.select('li[data-test="product-card"], .product-card, .product-item, article')
             
             if DEBUG_MODE:
                 logger.debug(f"  Delhaize: Found {len(cards)} product cards in DOM")
+                if len(cards) == 0:
+                    # Try to show what elements ARE in the page
+                    all_elements = soup.find_all(True, limit=20)
+                    element_tags = [f"<{el.name}>" for el in all_elements]
+                    logger.debug(f"  Delhaize: First 20 HTML elements found: {', '.join(element_tags)}")
+                    # Show the raw HTML structure (first 1000 chars)
+                    logger.debug(f"  Delhaize: Raw HTML structure (first 1000 chars): {response.text[:1000]}")
             
             for card in cards:
                 try:
