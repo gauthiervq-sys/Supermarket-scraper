@@ -167,13 +167,14 @@ def save_products_batch(products: List[Dict], search_term: str) -> int:
     return saved_count
 
 
-def get_products_by_search_term(search_term: str, limit: int = 100) -> List[Dict]:
+def get_products_by_search_term(search_term: str, limit: int = 100, offset: int = 0) -> List[Dict]:
     """
     Retrieve products from the database by search term.
     
     Args:
         search_term: The search term to filter by
         limit: Maximum number of products to return
+        offset: Number of products to skip for pagination
         
     Returns:
         List of product dictionaries
@@ -185,8 +186,8 @@ def get_products_by_search_term(search_term: str, limit: int = 100) -> List[Dict
             SELECT * FROM products
             WHERE search_term = ?
             ORDER BY scraped_at DESC
-            LIMIT ?
-        ''', (search_term, limit))
+            LIMIT ? OFFSET ?
+        ''', (search_term, limit, offset))
         
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
@@ -216,13 +217,14 @@ def get_all_products(limit: int = 1000, offset: int = 0) -> List[Dict]:
         return [dict(row) for row in rows]
 
 
-def get_products_by_store(store: str, limit: int = 100) -> List[Dict]:
+def get_products_by_store(store: str, limit: int = 100, offset: int = 0) -> List[Dict]:
     """
     Retrieve products from the database by store name.
     
     Args:
         store: The store name to filter by
         limit: Maximum number of products to return
+        offset: Number of products to skip for pagination
         
     Returns:
         List of product dictionaries
@@ -234,8 +236,8 @@ def get_products_by_store(store: str, limit: int = 100) -> List[Dict]:
             SELECT * FROM products
             WHERE store = ?
             ORDER BY scraped_at DESC
-            LIMIT ?
-        ''', (store, limit))
+            LIMIT ? OFFSET ?
+        ''', (store, limit, offset))
         
         rows = cursor.fetchall()
         return [dict(row) for row in rows]

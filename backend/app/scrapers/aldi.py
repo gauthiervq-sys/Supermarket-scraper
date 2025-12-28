@@ -77,7 +77,6 @@ async def scrape_aldi(search_term: str):
                         price_clean = price_text.replace('\n', '').replace('€', '').replace(',', '.').strip()
                         try:
                             # Extract just the numeric value
-                            import re
                             price_match = re.search(r'(\d+[.,]\d+|\d+)', price_clean)
                             if price_match:
                                 price = float(price_match.group(1).replace(',', '.'))

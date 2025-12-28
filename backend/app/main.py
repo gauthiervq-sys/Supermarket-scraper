@@ -220,9 +220,9 @@ async def get_saved_products(
     """
     try:
         if search_term:
-            products = database.get_products_by_search_term(search_term, limit)
+            products = database.get_products_by_search_term(search_term, limit, offset)
         elif store:
-            products = database.get_products_by_store(store, limit)
+            products = database.get_products_by_store(store, limit, offset)
         else:
             products = database.get_all_products(limit, offset)
         
