@@ -60,3 +60,30 @@ def calculate_price_per_liter(price: float, volume_str: str, name: str) -> float
         liters = parse_volume_from_text(name)
     if liters == 0: return 0.0
     return round(price / liters, 2)
+
+def extract_price_from_text(price_text: str) -> float:
+    """
+    Extract numeric price from text string.
+    Handles common formats: €12.99, 12,99€, 12.99, etc.
+    
+    Args:
+        price_text: Text containing a price
+        
+    Returns:
+        Extracted price as float, or 0.0 if parsing fails
+    """
+    if not price_text:
+        return 0.0
+    
+    # Clean up the text
+    price_clean = price_text.replace('\n', '').replace('€', '').replace(',', '.').strip()
+    
+    try:
+        # Extract just the numeric value using regex
+        price_match = re.search(r'(\d+[.,]\d+|\d+)', price_clean)
+        if price_match:
+            return float(price_match.group(1).replace(',', '.'))
+    except (ValueError, AttributeError):
+        pass
+    
+    return 0.0

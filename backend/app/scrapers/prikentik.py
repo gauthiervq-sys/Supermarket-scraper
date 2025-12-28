@@ -3,8 +3,8 @@ import urllib.parse
 import asyncio
 import logging
 import os
-import re
 from app.ocr_utils import extract_price_from_element_with_ocr_fallback
+from app.utils import extract_price_from_text
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -96,11 +96,7 @@ async def scrape_prikentik(search_term: str):
                     if price_el:
                         try:
                             price_text = await price_el.inner_text()
-                            price_clean = price_text.replace('\n', '').replace('€', '').replace(',', '.').strip()
-                            # Extract just the numeric value
-                            price_match = re.search(r'(\d+[.,]\d+|\d+)', price_clean)
-                            if price_match:
-                                price = float(price_match.group(1).replace(',', '.'))
+                            price = extract_price_from_text(price_text)
                         except:
                             # If text extraction fails, try OCR as fallback
                             price = await extract_price_from_element_with_ocr_fallback(detail_page, price_el, name, DEBUG_MODE)

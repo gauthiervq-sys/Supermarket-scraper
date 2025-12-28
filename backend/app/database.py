@@ -90,6 +90,8 @@ def save_product(product: Dict, search_term: str) -> int:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         
+        now = datetime.now()
+        
         cursor.execute('''
             INSERT INTO products (
                 store, name, price, volume, image, link,
@@ -110,8 +112,8 @@ def save_product(product: Dict, search_term: str) -> int:
             product.get('unit_type', ''),
             product.get('price_per_unit', 0.0),
             search_term,
-            datetime.now(),
-            datetime.now()
+            now,
+            now
         ))
         
         return cursor.lastrowid
@@ -135,6 +137,8 @@ def save_products_batch(products: List[Dict], search_term: str) -> int:
         
         for product in products:
             try:
+                now = datetime.now()
+                
                 cursor.execute('''
                     INSERT INTO products (
                         store, name, price, volume, image, link,
@@ -155,8 +159,8 @@ def save_products_batch(products: List[Dict], search_term: str) -> int:
                     product.get('unit_type', ''),
                     product.get('price_per_unit', 0.0),
                     search_term,
-                    datetime.now(),
-                    datetime.now()
+                    now,
+                    now
                 ))
                 saved_count += 1
             except Exception as e:

@@ -2,7 +2,7 @@ from playwright.async_api import async_playwright
 import urllib.parse
 import logging
 import os
-import re
+from app.utils import extract_price_from_text
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -74,14 +74,7 @@ async def scrape_aldi(search_term: str):
                     price_wrapper = await detail_page.query_selector('.price__wrapper, .price, [class*="price"]')
                     if price_wrapper:
                         price_text = await price_wrapper.inner_text()
-                        price_clean = price_text.replace('\n', '').replace('€', '').replace(',', '.').strip()
-                        try:
-                            # Extract just the numeric value
-                            price_match = re.search(r'(\d+[.,]\d+|\d+)', price_clean)
-                            if price_match:
-                                price = float(price_match.group(1).replace(',', '.'))
-                        except:
-                            price = 0.0
+                        price = extract_price_from_text(price_text)
                     
                     # Extract volume/quantity
                     volume = ""
