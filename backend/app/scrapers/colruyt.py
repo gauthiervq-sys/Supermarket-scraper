@@ -4,6 +4,7 @@ import urllib.parse
 import logging
 import os
 import re
+from app.utils import log_scraped_html_debug
 
 DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
@@ -29,6 +30,9 @@ async def scrape_colruyt(search_term: str):
             
             soup = BeautifulSoup(response.text, 'html.parser')
             cards = soup.select('.product-card, .product-item, article, [data-testid="product"]')
+            
+            # Log detailed HTML debugging information
+            log_scraped_html_debug(logger, "Colruyt", response.text, soup, len(cards))
             
             if DEBUG_MODE:
                 logger.debug(f"  Colruyt: Found {len(cards)} product cards in DOM")

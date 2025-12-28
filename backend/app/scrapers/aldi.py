@@ -4,7 +4,7 @@ import urllib.parse
 import logging
 import os
 import re
-from app.utils import extract_price_from_text
+from app.utils import extract_price_from_text, log_scraped_html_debug
 
 DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
@@ -31,6 +31,9 @@ async def scrape_aldi(search_term: str):
             
             soup = BeautifulSoup(response.text, 'html.parser')
             products = soup.select('.mod-article-tile')
+            
+            # Log detailed HTML debugging information
+            log_scraped_html_debug(logger, "Aldi", response.text, soup, len(products))
             
             if DEBUG_MODE:
                 logger.debug(f"  Aldi: Found {len(products)} product tiles on search page")
