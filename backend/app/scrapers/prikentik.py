@@ -3,6 +3,7 @@ import urllib.parse
 import asyncio
 import logging
 import os
+import re
 from app.ocr_utils import extract_price_from_element_with_ocr_fallback
 
 # Default page timeout in milliseconds

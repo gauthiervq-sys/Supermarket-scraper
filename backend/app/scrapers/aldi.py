@@ -2,6 +2,7 @@ from playwright.async_api import async_playwright
 import urllib.parse
 import logging
 import os
+import re
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -17,8 +18,10 @@ async def scrape_aldi(search_term: str):
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        context = await browser.new_context()
+        page = await context.new_page()
         page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
+        
         try:
             await page.goto(url, timeout=15000, wait_until="networkidle")
             if DEBUG_MODE:
@@ -33,46 +36,95 @@ async def scrape_aldi(search_term: str):
             await page.wait_for_selector('.mod-article-tile', timeout=6000)
             products = await page.query_selector_all('.mod-article-tile')
             if DEBUG_MODE:
-                logger.debug(f"  Aldi: Found {len(products)} product elements on page")
+                logger.debug(f"  Aldi: Found {len(products)} product tiles on search page")
+            
+            # Collect product links from search results
+            product_links = []
             for p in products:
                 try:
-                    name_el = await p.query_selector('.mod-article-tile__title')
-                    name = await name_el.inner_text()
-                    price_wrapper = await p.query_selector('.price__wrapper')
+                    link_el = await p.query_selector('a')
+                    link_href = await link_el.get_attribute('href') if link_el else ""
+                    if link_href:
+                        if not link_href.startswith('http'):
+                            link_href = f"https://www.aldi.be{link_href}"
+                        product_links.append(link_href)
+                except Exception as e:
+                    if DEBUG_MODE:
+                        logger.debug(f"  Aldi: Error extracting link: {e}")
+            
+            if DEBUG_MODE:
+                logger.debug(f"  Aldi: Collected {len(product_links)} product links, visiting each...")
+            
+            # Visit each product page to extract detailed information
+            for idx, product_url in enumerate(product_links):
+                try:
+                    detail_page = await context.new_page()
+                    detail_page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
+                    
+                    await detail_page.goto(product_url, timeout=15000, wait_until="domcontentloaded")
+                    
+                    # Extract product name
+                    name = ""
+                    name_el = await detail_page.query_selector('h1, .product-title, .mod-article-tile__title')
+                    if name_el:
+                        name = await name_el.inner_text()
+                    
+                    # Extract price from detail page
+                    price = 0.0
+                    price_wrapper = await detail_page.query_selector('.price__wrapper, .price, [class*="price"]')
                     if price_wrapper:
                         price_text = await price_wrapper.inner_text()
                         price_clean = price_text.replace('\n', '').replace('€', '').replace(',', '.').strip()
-                        price = float(price_clean)
-                    else:
-                        price = 0.0
+                        try:
+                            # Extract just the numeric value
+                            import re
+                            price_match = re.search(r'(\d+[.,]\d+|\d+)', price_clean)
+                            if price_match:
+                                price = float(price_match.group(1).replace(',', '.'))
+                        except:
+                            price = 0.0
                     
-                    # Try to extract volume from various possible locations
+                    # Extract volume/quantity
                     volume = ""
-                    quantity_el = await p.query_selector('.mod-article-tile__quantity')
+                    quantity_el = await detail_page.query_selector('.mod-article-tile__quantity, .product-quantity, [class*="quantity"]')
                     if quantity_el:
                         volume = await quantity_el.inner_text()
                     if not volume:
-                        subtitle_el = await p.query_selector('.mod-article-tile__subtitle')
+                        subtitle_el = await detail_page.query_selector('.mod-article-tile__subtitle, .product-subtitle')
                         if subtitle_el:
                             volume = await subtitle_el.inner_text()
-                    if not volume:
-                        subtitle_attr = await p.get_attribute('data-subtitle')
-                        if subtitle_attr:
-                            volume = subtitle_attr
                     
-                    img_el = await p.query_selector('img')
-                    img_src = await img_el.get_attribute('src') if img_el else ""
-                    # Ensure image URL is complete
-                    if img_src and not img_src.startswith('http'):
-                        img_src = f"https://www.aldi.be{img_src}"
-                    link_el = await p.query_selector('a')
-                    link_href = await link_el.get_attribute('href') if link_el else ""
-                    if link_href and not link_href.startswith('http'):
-                        link_href = f"https://www.aldi.be{link_href}"
-                    results.append({"store": "Aldi", "name": name.strip(), "price": price, "volume": volume.strip(), "image": img_src, "link": link_href})
+                    # Extract image
+                    img_src = ""
+                    img_el = await detail_page.query_selector('img.product-image, .product-image img, img')
+                    if img_el:
+                        img_src = await img_el.get_attribute('src') or ""
+                        if img_src and not img_src.startswith('http'):
+                            img_src = f"https://www.aldi.be{img_src}"
+                    
+                    if name:  # Only add if we got a name
+                        results.append({
+                            "store": "Aldi",
+                            "name": name.strip(),
+                            "price": price,
+                            "volume": volume.strip(),
+                            "image": img_src,
+                            "link": product_url
+                        })
+                        
+                        if DEBUG_MODE:
+                            logger.debug(f"  Aldi: [{idx+1}/{len(product_links)}] Extracted: {name[:50]} - €{price}")
+                    
+                    await detail_page.close()
+                    
                 except Exception as e:
                     if DEBUG_MODE:
-                        logger.debug(f"  Aldi: Error parsing product: {e}")
+                        logger.debug(f"  Aldi: Error scraping product page {product_url}: {e}")
+                    try:
+                        await detail_page.close()
+                    except:
+                        pass
+                        
         except Exception as e:
             logger.warning(f"  Aldi: Navigation error: {e}")
         await browser.close()
