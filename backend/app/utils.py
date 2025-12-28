@@ -132,3 +132,45 @@ def complete_url(url: str, base_url: str) -> str:
         return f"{base_url.rstrip('/')}{url}"
     else:
         return f"{base_url.rstrip('/')}/{url}"
+
+
+def log_scraped_html_debug(logger, store_name: str, response_text: str, soup, cards_found: int):
+    """
+    Log detailed HTML debugging information when DEBUG_MODE is enabled.
+    
+    Args:
+        logger: Logger instance to use
+        store_name: Name of the store being scraped
+        response_text: Raw HTML response text
+        soup: BeautifulSoup object
+        cards_found: Number of product cards found
+    """
+    import os
+    DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
+    
+    if not DEBUG_MODE:
+        return
+    
+    # Log HTML content length
+    logger.debug(f"  {store_name}: HTML content length: {len(response_text)} characters")
+    
+    # Log body text content
+    body = soup.find('body')
+    if body:
+        body_text = body.get_text(strip=True, separator=' ')
+        logger.debug(f"  {store_name}: Page body text (first 500 chars): {body_text[:500]}")
+        logger.debug(f"  {store_name}: Page body text (last 500 chars): {body_text[-500:]}")
+    else:
+        logger.debug(f"  {store_name}: No <body> tag found in HTML")
+    
+    # Check for JavaScript-rendered content indicators
+    js_indicators = ['window.__', 'React', 'Vue', 'Angular', '__NEXT_DATA__']
+    if any(indicator in response_text for indicator in js_indicators):
+        logger.debug(f"  {store_name}: ⚠️  Site appears to use JavaScript rendering")
+    
+    # If no cards found, log HTML structure for debugging
+    if cards_found == 0:
+        all_elements = soup.find_all(True, limit=20)
+        element_tags = [f"<{el.name}>" for el in all_elements]
+        logger.debug(f"  {store_name}: First 20 HTML elements found: {', '.join(element_tags)}")
+        logger.debug(f"  {store_name}: Raw HTML structure (first 1000 chars): {response_text[:1000]}")

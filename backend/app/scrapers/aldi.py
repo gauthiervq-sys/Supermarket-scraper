@@ -4,7 +4,7 @@ import urllib.parse
 import logging
 import os
 import re
-from app.utils import extract_price_from_text
+from app.utils import extract_price_from_text, log_scraped_html_debug
 
 DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
@@ -28,35 +28,15 @@ async def scrape_aldi(search_term: str):
             
             if DEBUG_MODE:
                 logger.debug(f"  Aldi: Page loaded successfully")
-                logger.debug(f"  Aldi: HTML content length: {len(response.text)} characters")
             
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Log the actual text content to help diagnose issues
-            if DEBUG_MODE:
-                body = soup.find('body')
-                if body:
-                    body_text = body.get_text(strip=True, separator=' ')
-                    logger.debug(f"  Aldi: Page body text (first 500 chars): {body_text[:500]}")
-                    logger.debug(f"  Aldi: Page body text (last 500 chars): {body_text[-500:]}")
-                else:
-                    logger.debug(f"  Aldi: No <body> tag found in HTML")
-                
-                # Check for JavaScript-rendered content indicators
-                if any(indicator in response.text for indicator in ['window.__', 'React', 'Vue', 'Angular', '__NEXT_DATA__']):
-                    logger.debug(f"  Aldi: ⚠️  Site appears to use JavaScript rendering")
-            
             products = soup.select('.mod-article-tile')
+            
+            # Log detailed HTML debugging information
+            log_scraped_html_debug(logger, "Aldi", response.text, soup, len(products))
             
             if DEBUG_MODE:
                 logger.debug(f"  Aldi: Found {len(products)} product tiles on search page")
-                if len(products) == 0:
-                    # Try to show what elements ARE in the page
-                    all_elements = soup.find_all(True, limit=20)
-                    element_tags = [f"<{el.name}>" for el in all_elements]
-                    logger.debug(f"  Aldi: First 20 HTML elements found: {', '.join(element_tags)}")
-                    # Show the raw HTML structure (first 1000 chars)
-                    logger.debug(f"  Aldi: Raw HTML structure (first 1000 chars): {response.text[:1000]}")
             
             # Collect product links from search results
             product_links = []

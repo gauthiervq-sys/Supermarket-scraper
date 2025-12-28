@@ -4,6 +4,7 @@ import urllib.parse
 import logging
 import os
 import re
+from app.utils import log_scraped_html_debug
 
 DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
@@ -26,35 +27,15 @@ async def scrape_ah(search_term: str):
             
             if DEBUG_MODE:
                 logger.debug(f"  AH: Page loaded successfully")
-                logger.debug(f"  AH: HTML content length: {len(response.text)} characters")
             
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Log the actual text content to help diagnose issues
-            if DEBUG_MODE:
-                body = soup.find('body')
-                if body:
-                    body_text = body.get_text(strip=True, separator=' ')
-                    logger.debug(f"  AH: Page body text (first 500 chars): {body_text[:500]}")
-                    logger.debug(f"  AH: Page body text (last 500 chars): {body_text[-500:]}")
-                else:
-                    logger.debug(f"  AH: No <body> tag found in HTML")
-                
-                # Check for JavaScript-rendered content indicators
-                if any(indicator in response.text for indicator in ['window.__', 'React', 'Vue', 'Angular', '__NEXT_DATA__']):
-                    logger.debug(f"  AH: ⚠️  Site appears to use JavaScript rendering")
-            
             cards = soup.select('article[data-test-id="product-card"], .product-card, [data-testid="product"], article')
+            
+            # Log detailed HTML debugging information
+            log_scraped_html_debug(logger, "AH", response.text, soup, len(cards))
             
             if DEBUG_MODE:
                 logger.debug(f"  AH: Found {len(cards)} product cards in DOM")
-                if len(cards) == 0:
-                    # Try to show what elements ARE in the page
-                    all_elements = soup.find_all(True, limit=20)
-                    element_tags = [f"<{el.name}>" for el in all_elements]
-                    logger.debug(f"  AH: First 20 HTML elements found: {', '.join(element_tags)}")
-                    # Show the raw HTML structure (first 1000 chars)
-                    logger.debug(f"  AH: Raw HTML structure (first 1000 chars): {response.text[:1000]}")
             
             for card in cards:
                 try:
