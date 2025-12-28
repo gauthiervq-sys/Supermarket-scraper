@@ -1,13 +1,11 @@
-from playwright.async_api import async_playwright
+import httpx
+from bs4 import BeautifulSoup
 import urllib.parse
-import asyncio
 import logging
 import os
-from app.ocr_utils import extract_price_from_element_with_ocr_fallback
+import re
 from app.utils import extract_price_from_text
 
-# Default page timeout in milliseconds
-DEFAULT_PAGE_TIMEOUT = 10000
 DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
 
@@ -18,60 +16,31 @@ async def scrape_prikentik(search_term: str):
     
     logger.info(f"🍺 Prik&Tik: Checking {url}")
     
-    async with async_playwright() as p:
-        try:
-            browser = await p.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"])
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            page = await context.new_page()
-            page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
-            await page.goto(url, timeout=15000, wait_until="networkidle")
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            # Get search results page
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            
             if DEBUG_MODE:
-                logger.debug(f"  Prik&Tik: Page loaded, waiting for content")
+                logger.debug(f"  Prik&Tik: Page loaded successfully")
             
-            try:
-                accept_btn = await page.wait_for_selector('#onetrust-accept-btn-handler, .cookie-accept', timeout=2000)
-                await accept_btn.click()
-                await asyncio.sleep(0.5)
-                if DEBUG_MODE:
-                    logger.debug(f"  Prik&Tik: Accepted cookies")
-            except: pass
+            soup = BeautifulSoup(response.text, 'html.parser')
+            products = soup.select('.product-item, li.product-item, .item.product')
             
-            # Wait for products to load
-            try: 
-                await page.wait_for_selector('.product-item, .product-items, .products-grid', timeout=6000)
-                if DEBUG_MODE:
-                    logger.debug(f"  Prik&Tik: Products loaded on page")
-            except:
-                if DEBUG_MODE:
-                    logger.debug(f"  Prik&Tik: No product elements found on page")
-            
-            # Scroll to trigger lazy loading
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
-            await asyncio.sleep(1)
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(1)
-            
-            # Additional wait for lazy loading to complete
-            await asyncio.sleep(2)
-            
-            # Collect product links from search results
-            products = await page.query_selector_all('.product-item, li.product-item, .item.product')
             if DEBUG_MODE:
                 logger.debug(f"  Prik&Tik: Found {len(products)} product tiles on search page")
             
+            # Collect product links from search results
             product_links = []
             for prod in products:
-                try:
-                    name_el = await prod.query_selector('.product-item-link, .product-name a, a.product-item-link, .product-item-name a')
-                    if name_el:
-                        link = await name_el.get_attribute('href')
-                        if link:
-                            product_links.append(link)
-                except Exception as e:
-                    if DEBUG_MODE:
-                        logger.debug(f"  Prik&Tik: Error extracting link: {e}")
+                name_el = prod.select_one('.product-item-link, .product-name a, a.product-item-link, .product-item-name a')
+                if name_el and name_el.get('href'):
+                    product_links.append(name_el.get('href'))
             
             if DEBUG_MODE:
                 logger.debug(f"  Prik&Tik: Collected {len(product_links)} product links, visiting each...")
@@ -79,34 +48,29 @@ async def scrape_prikentik(search_term: str):
             # Visit each product page to extract detailed information
             for idx, product_url in enumerate(product_links):
                 try:
-                    detail_page = await context.new_page()
-                    detail_page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
-                    
-                    await detail_page.goto(product_url, timeout=15000, wait_until="domcontentloaded")
+                    detail_response = await client.get(product_url, headers=headers)
+                    detail_response.raise_for_status()
+                    detail_soup = BeautifulSoup(detail_response.text, 'html.parser')
                     
                     # Extract product name from detail page
                     name = ""
-                    name_el = await detail_page.query_selector('h1.page-title, .product-name, h1')
+                    name_el = detail_soup.select_one('h1.page-title, .product-name, h1')
                     if name_el:
-                        name = await name_el.inner_text()
+                        name = name_el.get_text(strip=True)
                     
                     # Extract price from detail page (should be text, not image)
                     price = 0.0
-                    price_el = await detail_page.query_selector('.price, .price-wrapper .price, [data-price-type="finalPrice"]')
+                    price_el = detail_soup.select_one('.price, .price-wrapper .price, [data-price-type="finalPrice"]')
                     if price_el:
-                        try:
-                            price_text = await price_el.inner_text()
-                            price = extract_price_from_text(price_text)
-                        except:
-                            # If text extraction fails, try OCR as fallback
-                            price = await extract_price_from_element_with_ocr_fallback(detail_page, price_el, name, DEBUG_MODE)
+                        price_text = price_el.get_text(strip=True)
+                        price = extract_price_from_text(price_text)
                     
                     # Try multiple image selectors
                     img = ""
-                    img_el = await detail_page.query_selector('.product-image-photo, .product-media img, .gallery-placeholder img, img')
+                    img_el = detail_soup.select_one('.product-image-photo, .product-media img, .gallery-placeholder img, img')
                     if img_el:
                         for attr in ['data-original', 'data-src', 'data-lazy', 'srcset', 'src']:
-                            img = await img_el.get_attribute(attr)
+                            img = img_el.get(attr, '')
                             if img:
                                 break
                         # If srcset, take the first URL
@@ -132,19 +96,14 @@ async def scrape_prikentik(search_term: str):
                         if DEBUG_MODE:
                             logger.debug(f"  Prik&Tik: [{idx+1}/{len(product_links)}] Extracted: {name[:50]} - €{price}")
                     
-                    await detail_page.close()
-                    
                 except Exception as e:
                     if DEBUG_MODE:
                         logger.debug(f"  Prik&Tik: Error scraping product page {product_url}: {e}")
-                    try:
-                        await detail_page.close()
-                    except:
-                        pass
                         
-            await browser.close()
-        except Exception as e:
-            logger.warning(f"  Prik&Tik: Scraping error: {e}")
+    except Exception as e:
+        logger.warning(f"  Prik&Tik: Scraping error: {e}")
+        if DEBUG_MODE:
+            logger.exception(f"  Prik&Tik: Exception details:")
     
     # Filter results to match search term (case-insensitive partial match)
     search_lower = search_term.lower()
