@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 from app.ocr_utils import extract_price_from_element_with_ocr_fallback
+from app.utils import extract_price_from_text
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
@@ -55,55 +56,92 @@ async def scrape_prikentik(search_term: str):
             # Additional wait for lazy loading to complete
             await asyncio.sleep(2)
             
+            # Collect product links from search results
             products = await page.query_selector_all('.product-item, li.product-item, .item.product')
             if DEBUG_MODE:
-                logger.debug(f"  Prik&Tik: Found {len(products)} product elements on page")
+                logger.debug(f"  Prik&Tik: Found {len(products)} product tiles on search page")
+            
+            product_links = []
             for prod in products:
                 try:
                     name_el = await prod.query_selector('.product-item-link, .product-name a, a.product-item-link, .product-item-name a')
-                    name = await name_el.inner_text() if name_el else ""
-                    if not name:
-                        continue
-                        
-                    price_el = await prod.query_selector('.price, .price-wrapper .price, [data-price-type="finalPrice"]')
+                    if name_el:
+                        link = await name_el.get_attribute('href')
+                        if link:
+                            product_links.append(link)
+                except Exception as e:
+                    if DEBUG_MODE:
+                        logger.debug(f"  Prik&Tik: Error extracting link: {e}")
+            
+            if DEBUG_MODE:
+                logger.debug(f"  Prik&Tik: Collected {len(product_links)} product links, visiting each...")
+            
+            # Visit each product page to extract detailed information
+            for idx, product_url in enumerate(product_links):
+                try:
+                    detail_page = await context.new_page()
+                    detail_page.set_default_timeout(DEFAULT_PAGE_TIMEOUT)
+                    
+                    await detail_page.goto(product_url, timeout=15000, wait_until="domcontentloaded")
+                    
+                    # Extract product name from detail page
+                    name = ""
+                    name_el = await detail_page.query_selector('h1.page-title, .product-name, h1')
+                    if name_el:
+                        name = await name_el.inner_text()
+                    
+                    # Extract price from detail page (should be text, not image)
                     price = 0.0
+                    price_el = await detail_page.query_selector('.price, .price-wrapper .price, [data-price-type="finalPrice"]')
                     if price_el:
-                        price = await extract_price_from_element_with_ocr_fallback(page, price_el, name, DEBUG_MODE)
+                        try:
+                            price_text = await price_el.inner_text()
+                            price = extract_price_from_text(price_text)
+                        except:
+                            # If text extraction fails, try OCR as fallback
+                            price = await extract_price_from_element_with_ocr_fallback(detail_page, price_el, name, DEBUG_MODE)
                     
-                    link = await name_el.get_attribute('href') if name_el else ""
-                    
-                    # Try multiple image selectors and attributes for lazy loading
-                    img_el = await prod.query_selector('.product-image-photo, img.photo, .product-item-photo img, img')
+                    # Try multiple image selectors
                     img = ""
+                    img_el = await detail_page.query_selector('.product-image-photo, .product-media img, .gallery-placeholder img, img')
                     if img_el:
-                        # Try various lazy loading attributes first, breaking early when found
-                        for attr in ['data-original', 'data-src', 'data-lazy', 'data-amsrc', 'srcset', 'src']:
+                        for attr in ['data-original', 'data-src', 'data-lazy', 'srcset', 'src']:
                             img = await img_el.get_attribute(attr)
                             if img:
                                 break
-                        
                         # If srcset, take the first URL
                         if img and ' ' in img:
                             img = img.split()[0]
+                        # Ensure complete URL
+                        if img and not img.startswith('http'):
+                            if img.startswith('//'):
+                                img = f"https:{img}"
+                            else:
+                                img = f"https://www.prikentik.be{img}"
                     
-                    # Ensure image URL is complete
-                    if img and not img.startswith('http'):
-                        if img.startswith('//'):
-                            img = f"https:{img}"
-                        else:
-                            img = f"https://www.prikentik.be{img}"
+                    if name:  # Only add if we got a name
+                        results.append({
+                            "store": "Prik&Tik",
+                            "name": name.strip(),
+                            "price": price,
+                            "volume": "",
+                            "image": img,
+                            "link": product_url
+                        })
+                        
+                        if DEBUG_MODE:
+                            logger.debug(f"  Prik&Tik: [{idx+1}/{len(product_links)}] Extracted: {name[:50]} - €{price}")
                     
-                    results.append({
-                        "store": "Prik&Tik",
-                        "name": name.strip(),
-                        "price": price,
-                        "volume": "",
-                        "image": img,
-                        "link": link
-                    })
+                    await detail_page.close()
+                    
                 except Exception as e:
                     if DEBUG_MODE:
-                        logger.debug(f"  Prik&Tik: Error parsing product: {e}")
+                        logger.debug(f"  Prik&Tik: Error scraping product page {product_url}: {e}")
+                    try:
+                        await detail_page.close()
+                    except:
+                        pass
+                        
             await browser.close()
         except Exception as e:
             logger.warning(f"  Prik&Tik: Scraping error: {e}")
