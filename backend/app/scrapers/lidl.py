@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import urllib.parse
 import logging
 import os
-import re
+from app.utils import parse_price_from_element_text, complete_url
 
 DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() == 'true'
 logger = logging.getLogger(__name__)
@@ -12,6 +12,7 @@ async def scrape_lidl(search_term: str):
     results = []
     safe_term = urllib.parse.quote(search_term)
     url = f"https://www.lidl.be/q/nl-BE/search?q={safe_term}"
+    base_url = "https://www.lidl.be"
     
     logger.info(f"🟡 Lidl: Checking {url}")
     
@@ -41,35 +42,23 @@ async def scrape_lidl(search_term: str):
                     if not name:
                         continue
                     
-                    # Extract price
+                    # Extract price using utility function
                     price = 0.0
                     price_el = article.select_one('.price, [data-testid="price"]')
                     if price_el:
-                        price_txt = price_el.get_text(strip=True)
-                        # Remove currency symbols and convert to float
-                        price_txt = re.sub(r'[^\d,.]', '', price_txt)
-                        price_txt = price_txt.replace(',', '.')
-                        try:
-                            price = float(price_txt)
-                        except ValueError:
-                            price = 0.0
+                        price = parse_price_from_element_text(price_el.get_text(strip=True))
                     
                     # Extract image
                     img_el = article.select_one('img')
                     img = ""
                     if img_el:
                         img = img_el.get('data-src', img_el.get('src', ''))
-                    if img and not img.startswith('http'):
-                        if img.startswith('//'):
-                            img = f"https:{img}"
-                        else:
-                            img = f"https://www.lidl.be{img}"
+                    img = complete_url(img, base_url)
                     
                     # Extract link
                     link_el = article.select_one('a')
                     link = link_el.get('href', '') if link_el else ""
-                    if link and not link.startswith('http'):
-                        link = f"https://www.lidl.be{link}"
+                    link = complete_url(link, base_url)
                     
                     results.append({
                         "store": "Lidl",
