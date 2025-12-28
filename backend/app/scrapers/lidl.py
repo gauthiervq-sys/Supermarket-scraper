@@ -3,6 +3,7 @@ import urllib.parse
 import asyncio
 import logging
 import os
+import re
 
 # Default page timeout in milliseconds
 DEFAULT_PAGE_TIMEOUT = 10000
