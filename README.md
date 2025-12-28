@@ -359,6 +359,125 @@ export DB_PATH=/path/to/your/database.db
 uvicorn app.main:app --host 0.0.0.0 --port 8100
 ```
 
+## Usage Examples
+
+### Basic Search and Database Storage
+
+Every search automatically saves results to the database:
+
+```bash
+# Perform a search
+curl "http://localhost:8100/search?q=jupiler"
+
+# The results are automatically saved to the database
+# You can retrieve them later
+curl "http://localhost:8100/products?search_term=jupiler"
+```
+
+### Querying Saved Products
+
+```bash
+# Get all products from Aldi
+curl "http://localhost:8100/products?store=Aldi&limit=20"
+
+# Get all products (with pagination)
+curl "http://localhost:8100/products?limit=50&offset=0"
+
+# Get products from multiple searches
+curl "http://localhost:8100/products?search_term=cola"
+curl "http://localhost:8100/products?search_term=beer"
+```
+
+### Database Maintenance
+
+```bash
+# Check database statistics
+curl "http://localhost:8100/database/stats"
+
+# Clean up old products (older than 7 days)
+curl -X DELETE "http://localhost:8100/database/cleanup?days=7"
+
+# Clean up very old products (older than 30 days)
+curl -X DELETE "http://localhost:8100/database/cleanup?days=30"
+```
+
+### Using with Python
+
+```python
+import requests
+
+# Perform a search
+response = requests.get("http://localhost:8100/search?q=cola")
+data = response.json()
+print(f"Found {len(data['products'])} products")
+
+# Get products from database
+response = requests.get("http://localhost:8100/products?store=Colruyt")
+products = response.json()['products']
+for product in products[:5]:
+    print(f"{product['name']} - €{product['price']}")
+    
+# Get database statistics
+response = requests.get("http://localhost:8100/database/stats")
+stats = response.json()
+print(f"Total products in database: {stats['total_products']}")
+print(f"Stores: {list(stats['products_per_store'].keys())}")
+```
+
+### Integration with Data Analysis
+
+The database can be accessed directly for analysis:
+
+```python
+import sqlite3
+import pandas as pd
+
+# Connect to database
+conn = sqlite3.connect('products.db')
+
+# Load products into pandas DataFrame
+df = pd.read_sql_query("SELECT * FROM products", conn)
+
+# Analyze price trends
+avg_prices = df.groupby('store')['price'].mean()
+print(avg_prices)
+
+# Find best deals
+best_deals = df.nsmallest(10, 'price_per_liter')
+print(best_deals[['store', 'name', 'price', 'price_per_liter']])
+
+conn.close()
+```
+
+## Enhanced Scraping
+
+### Individual Product Page Visits
+
+Some scrapers (Aldi, Prik&Tik) have been enhanced to visit individual product pages instead of only scraping search results. This provides several benefits:
+
+**Advantages:**
+- ✅ **Better price accuracy**: Prices on product pages are often displayed as text rather than images
+- ✅ **More complete information**: Product pages contain detailed specifications
+- ✅ **Avoids OCR complexity**: No need to extract prices from images using OCR
+- ✅ **More reliable data**: Less prone to changes in search result page layouts
+
+**How it works:**
+1. Scraper visits the search results page
+2. Collects all product links
+3. Visits each product detail page
+4. Extracts complete product information
+5. Returns consolidated results
+
+**Performance considerations:**
+- Individual page visits increase scraping time (but still within acceptable limits)
+- Parallel processing helps maintain reasonable speed
+- Timeout settings ensure scrapers don't hang indefinitely
+
+**Which scrapers use this approach:**
+- **Aldi**: Visits product detail pages for complete info
+- **Prik&Tik**: Visits product detail pages to avoid image-based prices
+- **Colruyt, AH, Lidl, Delhaize**: Use API interception (already optimal)
+
 ## Troubleshooting
 
 ### Debug Mode
