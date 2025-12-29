@@ -19,12 +19,9 @@ function App() {
     setScraperStatuses([])  // Clear previous scraper statuses
 
     try {
-      const protocol = window.location.protocol
-      const hostname = window.location.hostname
-
-      // Backend via host-poort 8100
+      // Use proxy path that forwards to backend container
       const res = await fetch(
-        `${protocol}//${hostname}:8100/search?q=${encodeURIComponent(query)}`
+        `/api/search?q=${encodeURIComponent(query)}`
       )
 
       if (!res.ok) {
