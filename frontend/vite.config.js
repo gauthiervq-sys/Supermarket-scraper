@@ -8,6 +8,13 @@ export default defineConfig({
     port: 3100,
     watch: {
       usePolling: true
+    },
+    proxy: {
+      '/api': {
+        target: 'http://backend:8100',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
     }
   }
 })
