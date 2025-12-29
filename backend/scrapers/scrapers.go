@@ -43,7 +43,7 @@ func NewBrowser() *rod.Browser {
 	// Try to find system browser first
 	browserPath, _ := launcher.LookPath()
 	
-	// If not found, try common paths
+	// If not found, try common paths (Linux/Unix only - this application runs in Docker with Debian)
 	if browserPath == "" {
 		commonPaths := []string{
 			"/usr/bin/chromium",
