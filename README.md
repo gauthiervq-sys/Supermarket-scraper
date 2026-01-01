@@ -41,14 +41,36 @@ Optional (for containerized deployment):
 
 ## Installation from Scratch
 
-### 1. Clone the Repository
+### Quick Setup (Recommended)
+
+Use the automated setup script to install everything:
+
+```bash
+# Clone and setup in one go
+git clone https://github.com/gauthiervq-sys/Supermarket-scraper.git
+cd Supermarket-scraper
+./setup.sh
+```
+
+The setup script will:
+- ✅ Check for required prerequisites (Go, Node.js, npm)
+- ✅ Download all Go dependencies
+- ✅ Build the backend application
+- ✅ Install all Node.js dependencies
+- ✅ Provide instructions for running the application
+
+### Manual Setup
+
+If you prefer to set up manually:
+
+#### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/gauthiervq-sys/Supermarket-scraper.git
 cd Supermarket-scraper
 ```
 
-### 2. Backend Setup (Go)
+#### 2. Backend Setup (Go)
 
 Navigate to the backend directory and set up the Go environment:
 
@@ -62,7 +84,7 @@ go mod download
 go build -o supermarket-scraper main.go
 ```
 
-### 3. Frontend Setup
+#### 3. Frontend Setup
 
 Navigate to the frontend directory and install dependencies:
 

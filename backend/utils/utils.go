@@ -37,7 +37,8 @@ func ParseVolumeFromText(text string) float64 {
 	}
 
 	// Match single format: "1.5 L" or "330ml"
-	singleRe := regexp.MustCompile(`(?<!x)\s*([\d\.]+)\s*(l|cl|ml)`)
+	// Note: We check multi-pack format first, so this only matches if no "x" pattern was found
+	singleRe := regexp.MustCompile(`([\d\.]+)\s*(l|cl|ml)`)
 	if match := singleRe.FindStringSubmatch(text); match != nil {
 		size, _ := strconv.ParseFloat(match[1], 64)
 		unit := match[2]
@@ -79,7 +80,8 @@ func ParseUnitSize(text string) (float64, string) {
 	}
 
 	// Check for single format like "1.5 L" or "330ml"
-	singleRe := regexp.MustCompile(`(?<!x)\s*([\d\.]+)\s*(l|cl|ml)`)
+	// Note: We check multi-pack format first, so this only matches if no "x" pattern was found
+	singleRe := regexp.MustCompile(`([\d\.]+)\s*(l|cl|ml)`)
 	if match := singleRe.FindStringSubmatch(text); match != nil {
 		size, _ := strconv.ParseFloat(match[1], 64)
 		unit := strings.ToUpper(match[2])
