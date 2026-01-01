@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Supermarket Scraper Setup Script
 # This script automates the installation and setup process
