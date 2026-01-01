@@ -14,7 +14,7 @@ RUN apt-get update && \
 # Pre-download modules during build to speed up startup
 # Copy go.mod and go.sum first for better layer caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go env -w GOPROXY=direct && go mod download || true
 
 # Expose port
 EXPOSE 8100
