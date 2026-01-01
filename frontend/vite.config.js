@@ -11,8 +11,8 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        // Use localhost for local dev; switch to backend:8100 when in Docker
-        target: 'http://localhost:8100',
+        // Use backend service name in Docker, fallback to localhost for local dev
+        target: process.env.VITE_API_URL || 'http://backend:8100',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }
