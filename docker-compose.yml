@@ -10,6 +10,12 @@ services:
       - DEBUG_MODE=${DEBUG_MODE:-false}
       - DB_PATH=/app/products.db
     ipc: host
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8100/database/stats"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
 
   frontend:
     build: ./frontend
@@ -18,5 +24,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    environment:
+      - VITE_API_URL=http://backend:8100
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
