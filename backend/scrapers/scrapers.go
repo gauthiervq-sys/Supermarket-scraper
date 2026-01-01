@@ -40,11 +40,35 @@ type ScraperFunc func(searchTerm string) ([]ScraperProduct, error)
 
 // NewBrowser creates a new rod browser instance
 func NewBrowser() *rod.Browser {
+	// Try to find system browser first
+	browserPath, _ := launcher.LookPath()
+	
+	// If not found, try common paths (Linux/Unix only - this application runs in Docker with Debian)
+	if browserPath == "" {
+		commonPaths := []string{
+			"/usr/bin/chromium",
+			"/usr/bin/chromium-browser",
+			"/usr/bin/google-chrome",
+		}
+		for _, path := range commonPaths {
+			if _, err := os.Stat(path); err == nil {
+				browserPath = path
+				break
+			}
+		}
+	}
+	
 	// Launch browser in headless mode
-	path := launcher.New().
+	l := launcher.New().
 		Headless(true).
-		Devtools(false).
-		MustLaunch()
+		Devtools(false)
+	
+	// Set browser binary path if found
+	if browserPath != "" {
+		l = l.Bin(browserPath)
+	}
+	
+	path := l.MustLaunch()
 
 	browser := rod.New().
 		ControlURL(path).
