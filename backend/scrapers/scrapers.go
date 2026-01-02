@@ -85,7 +85,15 @@ func WaitForPageLoad(page *rod.Page, selector string, timeout time.Duration) err
 	return err
 }
 
-// WaitForPageReady waits for the page to be ready and network to be mostly idle
+// WaitForPageReady waits for the page to be ready and network to be mostly idle.
+// It uses a multi-phase approach to handle dynamically loaded content:
+// 1. Waits for the initial page load event
+// 2. Waits for minWaitSeconds to allow JavaScript to render dynamic content
+// 3. Waits an additional 1 second for any AJAX requests to complete
+//
+// Parameters:
+//   page: The rod.Page instance to wait on
+//   minWaitSeconds: Minimum seconds to wait for dynamic content after page load (typically 3-5)
 func WaitForPageReady(page *rod.Page, minWaitSeconds int) {
 	// Wait for basic page load
 	page.MustWaitLoad()
