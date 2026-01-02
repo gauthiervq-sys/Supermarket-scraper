@@ -61,7 +61,9 @@ func NewBrowser() *rod.Browser {
 	// Launch browser in headless mode
 	l := launcher.New().
 		Headless(true).
-		Devtools(false)
+		Devtools(false).
+		Set("no-sandbox", "").
+		Set("disable-setuid-sandbox", "")
 	
 	// Set browser binary path if found
 	if browserPath != "" {
@@ -81,6 +83,26 @@ func NewBrowser() *rod.Browser {
 func WaitForPageLoad(page *rod.Page, selector string, timeout time.Duration) error {
 	_, err := page.Timeout(timeout).Element(selector)
 	return err
+}
+
+// WaitForPageReady waits for the page to be ready and network to be mostly idle.
+// It uses a multi-phase approach to handle dynamically loaded content:
+// 1. Waits for the initial page load event
+// 2. Waits for minWaitSeconds to allow JavaScript to render dynamic content
+// 3. Waits an additional 1 second for any AJAX requests to complete
+//
+// Parameters:
+//   page: The rod.Page instance to wait on
+//   minWaitSeconds: Minimum seconds to wait for dynamic content after page load (typically 3-5)
+func WaitForPageReady(page *rod.Page, minWaitSeconds int) {
+	// Wait for basic page load
+	page.MustWaitLoad()
+	
+	// Give the page time to render dynamic content
+	time.Sleep(time.Duration(minWaitSeconds) * time.Second)
+	
+	// Wait a bit for any AJAX requests
+	time.Sleep(1 * time.Second)
 }
 
 // ExtractPrice extracts price from text string
@@ -160,8 +182,8 @@ func ScrapeColruyt(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	// Wait for page to load
-	time.Sleep(2 * time.Second)
+	// Wait for page to load properly
+	WaitForPageReady(page, 3)
 	
 	LogDebug("Colruyt", "Page loaded successfully")
 	
@@ -251,7 +273,7 @@ func ScrapeAH(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	time.Sleep(2 * time.Second)
+	WaitForPageReady(page, 3)
 	
 	LogDebug("Albert Heijn", "Page loaded successfully")
 	
@@ -291,7 +313,7 @@ func ScrapeAldi(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	time.Sleep(2 * time.Second)
+	WaitForPageReady(page, 3)
 	
 	LogDebug("Aldi", "Page loaded successfully")
 	
@@ -327,7 +349,7 @@ func ScrapeDelhaize(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	time.Sleep(2 * time.Second)
+	WaitForPageReady(page, 3)
 	
 	var products []ScraperProduct
 	
@@ -363,7 +385,7 @@ func ScrapeLidl(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	time.Sleep(2 * time.Second)
+	WaitForPageReady(page, 3)
 	
 	var products []ScraperProduct
 	
@@ -399,7 +421,7 @@ func ScrapeJumbo(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	time.Sleep(2 * time.Second)
+	WaitForPageReady(page, 3)
 	
 	var products []ScraperProduct
 	
@@ -435,7 +457,7 @@ func ScrapeCarrefour(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	time.Sleep(2 * time.Second)
+	WaitForPageReady(page, 3)
 	
 	var products []ScraperProduct
 	
@@ -471,7 +493,7 @@ func ScrapePrikentik(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	time.Sleep(2 * time.Second)
+	WaitForPageReady(page, 3)
 	
 	var products []ScraperProduct
 	
@@ -507,7 +529,7 @@ func ScrapeSnuffelstore(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	time.Sleep(2 * time.Second)
+	WaitForPageReady(page, 3)
 	
 	var products []ScraperProduct
 	
@@ -543,7 +565,7 @@ func ScrapeDrinkscorner(searchTerm string) ([]ScraperProduct, error) {
 	page := browser.MustPage(targetURL)
 	defer page.MustClose()
 	
-	time.Sleep(2 * time.Second)
+	WaitForPageReady(page, 3)
 	
 	var products []ScraperProduct
 	
